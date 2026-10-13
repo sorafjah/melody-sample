@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>メロディサンプル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* layout: 上に短い説明、下にメロディーカードの格子。カードは「絵・名前・音の形・イメージ・使う場面・ボタン」 */
+:root{
+  --bg:#F3F7F6; --card:#FFFFFF; --ink:#26332F; --sub:#5D6E69; --line:#D8E3E0;
+  --accent:#2F8F7B; --accent-ink:#FFFFFF; --soft:#E3F1ED; --note:#B9CFC9;
+  --font:"BIZ UDPGothic","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141B19; --card:#1D2725; --ink:#E6EEEB; --sub:#9DB0AA; --line:#2E3C39;
+  --accent:#5CC2AB; --accent-ink:#0F1715; --soft:#233531; --note:#43605A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141B19; --card:#1D2725; --ink:#E6EEEB; --sub:#9DB0AA; --line:#2E3C39;
+  --accent:#5CC2AB; --accent-ink:#0F1715; --soft:#233531; --note:#43605A; color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--font);margin:0;padding:24px 16px 40px;touch-action:manipulation;-webkit-user-select:none;user-select:none;line-height:1.7}
+rt{font-size:.5em;color:var(--sub)}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-size:1.5rem;margin:0;text-wrap:balance}
+.lead{margin:0;color:var(--sub);max-width:65ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card.playing{border-color:var(--accent)}
+.head{display:flex;align-items:center;gap:14px}
+.pic{width:64px;height:64px;flex:none;border-radius:12px;background:var(--soft);color:var(--accent);display:grid;place-items:center}
+.pic svg{width:44px;height:44px}
+.name{font-size:1.3rem;font-weight:700;margin:0}
+.meta{font-size:.85rem;color:var(--sub);margin:0;font-variant-numeric:tabular-nums}
+.roll{width:100%;height:auto;display:block;background:var(--soft);border-radius:8px}
+.roll rect{fill:var(--note)} .roll rect.on{fill:var(--accent)}
+.roll line{stroke:var(--accent);stroke-width:1.5}
+.label{font-size:.8rem;font-weight:700;color:var(--accent);letter-spacing:.06em;margin:0}
+.text{margin:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto}
+button{font-family:inherit;font-size:1rem;font-weight:700;min-height:48px;min-width:48px;padding:0 18px;border-radius:10px;border:2px solid var(--accent);cursor:pointer;touch-action:manipulation}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.play{background:var(--accent);color:var(--accent-ink);flex:1}
+.copy{background:var(--card);color:var(--accent)}
+.msg{font-size:.85rem;color:var(--sub);min-height:1.4em;margin:0}
+.foot{font-size:.85rem;color:var(--sub);margin:0;max-width:70ch}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <h1>メロディサンプル</h1>
+  <p class="lead">2秒から4秒くらいの、みじかいメロディーを<ruby>集<rt>あつ</rt></ruby>めたよ。「きいてみる」をおすと<ruby>鳴<rt>な</rt></ruby>るよ。</p>
+  <div class="grid" id="grid"></div>
+  <div class="row">
+    <button class="copy" type="button" id="copy-all"><ruby>全部<rt>ぜんぶ</rt></ruby>の<ruby>部<rt>ぶ</rt></ruby><ruby>品<rt>ひん</rt></ruby>をコピー</button>
+    <p class="msg" id="copy-all-msg" aria-live="polite" style="align-self:center"></p>
+  </div>
+  <p class="foot">「<ruby>部<rt>ぶ</rt></ruby><ruby>品<rt>ひん</rt></ruby>をコピー」をおすと、<ruby>音<rt>おと</rt></ruby>を<ruby>鳴<rt>な</rt></ruby>らすプログラムとメロディーのデータが、ひとまとめにコピーされるよ。ほかのタイマーを<ruby>作<rt>つく</rt></ruby>っている<ruby>会話<rt>かいわ</rt></ruby>に<ruby>貼<rt>は</rt></ruby>って、「これを<ruby>組<rt>く</rt></ruby>みこんで」とたのんでね。</p>
+</div>
+
+<script>
+const R = s => s.replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>');
+
+const ICONS = {
+  wind:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 18h22a6 6 0 1 0-6-6"/><path d="M6 26h32a5 5 0 1 1-5 5"/><path d="M6 34h14"/></svg>',
+  bird:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M8 28c4 8 18 10 26 2l8-4-8-2c-2-8-12-10-16-4-2 3-4 6-10 8z"/><circle cx="32" cy="22" r="1.5" fill="currentColor"/><path d="M18 30l-4 10M24 31l-2 9"/></svg>',
+  stairs:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M6 40h8v-8h8v-8h8v-8h8V8"/><path d="M34 8l4-4 4 4"/></svg>',
+  bell:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M24 6v4"/><path d="M12 34c2-3 3-6 3-12a9 9 0 0 1 18 0c0 6 1 9 3 12z"/><path d="M8 34h32"/><path d="M20 38a4 4 0 0 0 8 0"/></svg>',
+  wood:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M8 14v20M16 12v24M24 10v28M32 12v24M40 14v20"/><path d="M30 6l6 6" /></svg>',
+  drum:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="24" cy="22" rx="16" ry="6"/><path d="M8 22v12c0 3 7 6 16 6s16-3 16-6V22"/><path d="M14 4l8 14M34 4l-8 14"/></svg>',
+  hurry:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="28" cy="26" r="14"/><path d="M28 18v8l5 4"/><path d="M4 20h6M2 27h7M5 34h6"/><path d="M24 6h8"/></svg>',
+  star:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"><path d="M24 5l5.6 12 13 1.4-9.8 8.8 2.8 12.8L24 33.5 12.4 40l2.8-12.8-9.8-8.8 13-1.4z"/></svg>',
+  flag:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M10 44V6"/><path d="M10 8h26l-6 8 6 8H10"/></svg>',
+  box:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M6 18h36v22H6z"/><path d="M6 18l6-10h24l6 10"/><path d="M19 26h10"/></svg>',
+  call:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M6 20v8h8l14 9V11l-14 9z"/><path d="M34 18a8 8 0 0 1 0 12M38 13a14 14 0 0 1 0 22"/></svg>',
+  retry:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M38 24a14 14 0 1 1-4-9.8"/><path d="M36 6v9h-9"/></svg>',
+  sparkle:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M20 8c1 8 4 11 12 12-8 1-11 4-12 12-1-8-4-11-12-12 8-1 11-4 12-12z"/><path d="M36 28c.5 4 2 5.5 6 6-4 .5-5.5 2-6 6-.5-4-2-5.5-6-6 4-.5 5.5-2 6-6z"/></svg>',
+  question:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M17 17a7 7 0 1 1 10 6.3c-2 1-3 2.6-3 4.7v2"/><circle cx="24" cy="37" r="1.8" fill="currentColor"/></svg>',
+  jump:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 38c4-16 10-16 14 0M18 38c4-20 12-20 16 0M34 38c2-10 6-10 8 0"/></svg>',
+  moon:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"><path d="M30 6a17 17 0 1 0 12 26A15 15 0 0 1 30 6z"/></svg>',
+  sun:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 32a12 12 0 0 1 24 0"/><path d="M4 32h40M10 38h28M24 10v4M10 18l3 3M38 18l-3 3"/></svg>'
+};
+
+// notes: [MIDI番号, 拍]  null = 休符。最後は属音（ソ）など「つづく」音で止める
+const MELODIES = [
+  { id:'soyokaze', name:'そよかぜ', icon:'wind', bpm:96, tone:'airy', echo:true,
+    notes:[[76,.5],[79,.5],[84,1],[83,.5],[81,.5],[79,1.5]],
+    layers:[
+      { tone:'pad', gain:.5, notes:[[[48,60,64,67],2],[[43,59,62,67],3]] },
+      { tone:'chime', gain:.35, notes:[[null,1],[88,1],[null,1],[86,1],[null,1]] }],
+    image:'まどから{風|かぜ}がふわっと{入|はい}ってくるような、やわらかい{音|おと}。{上|あ}がってから、ゆっくりおりてくるよ。',
+    use:'{集|しゅう}{中|ちゅう}しているときの「いま{何|なん}{分|ぷん}たったよ」のお{知|し}らせ。じゃまになりにくいよ。' },
+  { id:'soyokaze-long', name:'そよかぜ（ながめ）', icon:'wind', bpm:96, tone:'airy', echo:true,
+    notes:[[76,.5],[79,.5],[84,1],[83,.5],[81,.5],[79,1],[81,.5],[83,.5],[86,1.5]],
+    layers:[
+      { tone:'pad', gain:.5, notes:[[[48,60,64,67],2],[[40,59,64,67],2],[[43,59,62,67],2.5]] },
+      { tone:'chime', gain:.35, notes:[[null,1],[88,1],[null,1],[86,1],[null,1.5],[91,1]] }],
+    image:'「そよかぜ」のつづき。{風|かぜ}がふわっと{入|はい}ってきて、ゆれながら、もう{一|いち}{度|ど}すうっと{空|そら}へ{上|あ}がっていくような{音|おと}。{最|さい}{後|ご}は{高|たか}いレでふわっととまるよ。',
+    use:'「そよかぜ」だと{短|みじか}くて{気|き}づきにくいとき。{区|く}{切|ぎ}りの{合|あい}{図|ず}として、もう{少|すこ}しはっきり{知|し}らせたいとき。' },
+  { id:'kotori', name:'ことり', icon:'bird', bpm:140, tone:'sine',
+    notes:[[91,.25],[88,.25],[91,.25],[88,.25],[null,.5],[93,.25],[91,.25],[88,.25],[86,1]],
+    image:'{朝|あさ}の{小|こ}{鳥|とり}が「ピピッ、ピピッ」とさえずる{音|おと}。{高|たか}くて、みじかくて、{明|あか}るいよ。',
+    use:'「そろそろだよ」の{軽|かる}い{合|あい}{図|ず}。{決|き}まった{間|かん}{隔|かく}でくりかえし{鳴|な}らすのにも{向|む}いているよ。' },
+  { id:'noborizaka', name:'のぼりざか', icon:'stairs', bpm:120, tone:'square',
+    notes:[[72,.5],[74,.5],[76,.5],[77,.5],[79,1.5]],
+    image:'{階|かい}{段|だん}を{一|いっ}{歩|ぽ}ずつのぼっていくような{音|おと}。ドレミファソと、まっすぐ{上|あ}がるよ。',
+    use:'「あと{半|はん}{分|ぶん}」「ここからもうひとがんばり」のとき。{前|まえ}に{進|すす}む{気|き}{持|も}ちになれるよ。' },
+  { id:'kane', name:'とおくのかね', icon:'bell', bpm:72, tone:'bell',
+    notes:[[79,1],[76,1],[77,1],[74,2]],
+    image:'{遠|とお}くの{鐘|かね}が、ゆっくり4つ{鳴|な}る{音|おと}。{音|おと}がのびて、ひびきがのこるよ。',
+    use:'{活|かつ}{動|どう}からおやすみにかわるときの{区|く}{切|ぎ}り。{気|き}{持|も}ちをきりかえる{合|あい}{図|ず}になるよ。' },
+  { id:'mokkin', name:'もっきん', icon:'wood', bpm:132, tone:'wood',
+    notes:[[72,.5],[72,.5],[76,.5],[79,.5],[null,.5],[81,.5],[79,1]],
+    image:'{木|もっ}{琴|きん}をポコポコたたくような{音|おと}。はずんでいて、{楽|たの}しい{感|かん}じだよ。',
+    use:'おやすみの{時|じ}{間|かん}や、{楽|たの}しい{活|かつ}{動|どう}のとちゅう。{明|あか}るい{雰|ふん}{囲|い}{気|き}のまま{知|し}らせたいとき。' },
+  { id:'yuuyake', name:'ゆうやけ', icon:'sun', bpm:80, tone:'soft',
+    notes:[[69,1],[72,.5],[76,1.5],[74,.5],[72,.5],[71,1.5]],
+    image:'{夕|ゆう}{方|がた}の{空|そら}をながめているような、しずかで{少|すこ}しさみしい{音|おと}。ひくめでゆっくりだよ。',
+    use:'「{終|お}わりが{近|ちか}いよ」のお{知|し}らせや、{気|き}{持|も}ちを{落|お}ち{着|つ}かせたいとき。' },
+  { id:'hayaku', name:'はやくはやく', icon:'hurry', bpm:168, tone:'lead',
+    layers:[
+      { tone:'bass', gain:.9, notes:[48,50,52,53,55].flatMap(m => Array(4).fill([m,.5])).concat([[43,1]]) },
+      { tone:'hat', gain:1, notes:Array(20).fill(0).map((_, i) => [0, .5, i % 2 ? 1 : .55]).concat([[0,1,1.2]]) },
+      { tone:'stab', gain:.45, notes:[[[60,64,67],2],[[62,65,71],2],[[64,67,72],2],[[65,69,72],2],[[67,71,74],2],[[67,71,74,79],1]] }],
+    notes:[
+      // はや・く、はや・く
+      [72,.5],[76,.5],[72,.5],[76,.5],
+      [74,.5],[77,.5],[74,.5],[77,.5],
+      // こまかく、せかす
+      [76,.25],[79,.25],[76,.25],[79,.25],[76,.25],[79,.25],[76,.25],[79,.25],
+      [77,.25],[81,.25],[77,.25],[81,.25],[77,.25],[81,.25],[77,.25],[81,.25],
+      // かけあがる
+      [81,.25],[83,.25],[84,.25],[86,.25],[88,.25],[89,.25],[91,.25],[93,.25],
+      // 上がったままとまる
+      [95,1]],
+    image:'「はやく、はやく！」とせかすような{音|おと}。{同|おな}じ{音|おと}をくりかえしながら、だんだん{細|こま}かく{速|はや}くなって、{最|さい}{後|ご}はいちばん{高|たか}い{音|おと}まで{上|あ}がって、そのままとまるよ。',
+    use:'のこり{時|じ}{間|かん}が{少|すこ}しになったとき。「いそいでね」「そろそろかたづけよう」と{知|し}らせたいとき。' },
+  { id:'dekita', name:'できた！', icon:'star', bpm:130, tone:'brass',
+    notes:[[67,.5],[67,.25],[67,.25],[72,1],[null,.25],[76,.5],[79,1.75]],
+    layers:[{ tone:'pad', gain:.6, notes:[[null,2.25],[[48,60,64,67],2.25]] }],
+    image:'「パッパカ、パーン！」と{鳴|な}る、{小|ちい}さなファンファーレ。ラッパのような{音|おと}だよ。',
+    use:'{問|もん}{題|だい}ができたとき、{目|もく}{標|ひょう}を{達|たっ}{成|せい}したとき。ほめるときの{合|あい}{図|ず}に。' },
+  { id:'hajimaru', name:'はじまるよ', icon:'flag', bpm:96, tone:'musicbox', echo:true,
+    notes:[[60,.25],[64,.25],[67,.25],[72,.25],[76,.25],[79,.25],[84,2]],
+    layers:[{ tone:'pad', gain:.5, notes:[[[48,60,64,67],3.5]] }],
+    image:'{下|した}から{上|うえ}へ、キラキラとかけあがる{音|おと}。まくが{開|ひら}くような{感|かん}じだよ。',
+    use:'{授|じゅ}{業|ぎょう}や{活|かつ}{動|どう}のはじまり。{画|が}{面|めん}がきりかわるとき。' },
+  { id:'okataduke', name:'おかたづけ', icon:'box', bpm:132, tone:'wood',
+    notes:[[72,.5],[74,.5],[76,.5],[72,.5],[77,.5],[76,.5],[74,1],[79,.5],[77,.5],[76,.5],[74,.5],[72,1.5]],
+    layers:[{ tone:'bass', gain:.7, notes:[[48,1],[55,1],[48,1],[55,1],[50,1],[55,1],[48,1.5]] }],
+    image:'ポコポコとはずむ、{楽|たの}しい{木|もっ}{琴|きん}の{音|おと}。ベースがリズムをきざむよ。',
+    use:'かたづけをはじめるとき。{楽|たの}しい{気|き}{持|も}ちで{次|つぎ}のことにうつりたいとき。' },
+  { id:'atsumaro', name:'あつまろう', icon:'call', bpm:90, tone:'airy', echo:true,
+    notes:[[79,1],[76,1],[null,.5],[79,.5],[81,.5],[79,.5],[76,1.5]],
+    layers:[{ tone:'pad', gain:.45, notes:[[[48,60,64,67],2],[[41,57,60,65],1.5],[[48,60,64,67],2]] }],
+    image:'「おーい、おーい」と{遠|とお}くからよぶような{音|おと}。やまびこのようにひびくよ。',
+    use:'みんなをあつめたいとき。{前|まえ}を{見|み}てほしいとき。' },
+  { id:'oshii', name:'おしい！', icon:'retry', bpm:110, tone:'airy',
+    notes:[[79,.5],[77,.5],[76,.5],[null,.25],[74,.25],[76,.25],[79,1.25]],
+    layers:[{ tone:'pad', gain:.4, notes:[[[43,59,62,65],1.75],[[48,60,64,67],2.25]] }],
+    image:'{一|いっ}{度|ど}ポロンと{下|さ}がって、すぐに「もういっかい！」と{上|あ}がる{音|おと}。せめない、やさしい{音|おと}だよ。',
+    use:'まちがえたとき。「おしいね、もう{一|いち}{回|かい}やってみよう」と{伝|つた}えたいとき。' },
+  { id:'hoshizora', name:'ほしぞら', icon:'sparkle', bpm:84, tone:'musicbox', echo:true,
+    notes:[[84,.5],[79,.5],[76,.5],[79,.5],[83,.5],[79,.5],[74,.5],[79,.5],[84,1.5]],
+    image:'オルゴールの{音|おと}。{夜|よる}の{空|そら}で、{星|ほし}がチカチカ{光|ひか}っているような{感|かん}じだよ。',
+    use:'しずかに{作|さ}{業|ぎょう}するとき。{落|お}ち{着|つ}いたふんいきにしたいとき。' },
+  { id:'fushigi', name:'ふしぎ', icon:'question', bpm:100, tone:'musicbox', echo:true,
+    notes:[[72,.5],[74,.5],[76,.5],[78,.5],[80,.5],[82,.5],[84,2]],
+    layers:[{ tone:'pad', gain:.45, notes:[[[48,64,68,72],5]] }],
+    image:'ふわふわと{宙|ちゅう}にうかぶような、ふしぎな{音|おと}。「なんだろう？」という{気|き}{持|も}ちになるよ。',
+    use:'クイズの{問|もん}{題|だい}を{出|だ}すとき。「なにがおこるかな？」とわくわくさせたいとき。' },
+  { id:'pyonpyon', name:'ぴょんぴょん', icon:'jump', bpm:120, tone:'square',
+    notes:[[72,.25],[null,.25],[79,.25],[null,.25],[76,.25],[null,.25],[84,.25],[null,.25],[79,.5],[83,.5],[84,1]],
+    layers:[{ tone:'bass', gain:.6, notes:[[48,.5],[null,.5],[48,.5],[null,.5],[43,.5],[43,.5],[48,1]] }],
+    image:'カエルがぴょんぴょんはねるような、{元|げん}{気|き}な{音|おと}。ゲームの{音|おと}みたいだよ。',
+    use:'{体|からだ}を{動|うご}かす{活|かつ}{動|どう}。{楽|たの}しいミニゲームのはじまりや、ポイントをとったとき。' },
+  { id:'oyasumi', name:'おやすみ', icon:'moon', bpm:70, tone:'airy', echo:true,
+    notes:[[67,1],[64,1],[62,.5],[64,.5],[60,1.5]],
+    layers:[{ tone:'pad', gain:.5, notes:[[[48,60,64,67],2],[[43,59,62,65],1],[[48,60,64,67],1.5]] }],
+    image:'ゆっくり、ひくい{音|おと}でおりてくる{子|こ}もり{歌|うた}のような{音|おと}。{気|き}{持|も}ちがしずまるよ。',
+    use:'{休|きゅう}{憩|けい}のはじまり。「しずかにしようね」と{伝|つた}えたいとき。{一|いち}{日|にち}の{終|お}わり。' },
+  // [MIDI番号(和音は配列), 拍, 強さ]
+  { id:'dodoon', name:'どどーん', icon:'drum', bpm:140, tone:'drum',
+    notes:[
+      // たんたか ×4
+      [55,.5],[60,.25,.8],[60,.25,.8],[55,.5],[60,.25,.8],[60,.25,.8],
+      [55,.5],[60,.25,.8],[60,.25,.8],[55,.5],[60,.25,.8],[60,.25,.8],
+      // たんっ ×8（だんだん高く、強く）
+      [60,1,.7],[62,1,.75],[64,1,.8],[65,1,.85],[67,1,.9],[69,1,.95],[71,1,1],[72,1,1.05],
+      // たたたた ×4
+      [72,.25,.8],[72,.25,.7],[72,.25,.7],[72,.25,.7],
+      [74,.25,.85],[74,.25,.75],[74,.25,.75],[74,.25,.75],
+      [76,.25,.9],[76,.25,.8],[76,.25,.8],[76,.25,.8],
+      [77,.25,.95],[77,.25,.85],[77,.25,.9],[77,.25,.95],
+      // ダン！ダン！
+      [79,1,1.3],[79,1,1.3],
+      // どどーん！！
+      [[43,55],.5,1.3],[[43,55,62,67,71,74],3,1.6]],
+    image:'{太|たい}{鼓|こ}が「たんたか、たんたか」と{始|はじ}まって、だんだん{高|たか}く、{速|はや}く{盛|も}り{上|あ}がり、{最|さい}{後|ご}に「どどーん！」と{大|おお}きく{鳴|な}るよ。',
+    use:'のこりの{時|じ}{間|かん}がわずかになったとき。「ラストスパート！」と{気|き}{持|も}ちをもり{上|あ}げたいとき。' }
+];
+
+const TONE_NAME = {brass:'ラッパの{音|おと}', musicbox:'オルゴールの{音|おと}', soft:'やわらかい{音|おと}', sine:'すんだ{音|おと}', square:'ピコピコした{音|おと}', bell:'かねの{音|おと}', airy:'ふんわりした{音|おと}', lead:'ピコピコした{音|おと}＋リズム', wood:'{木|き}の{音|おと}', drum:'{太|たい}{鼓|こ}の{音|おと}'};
+
+// ---- 音を鳴らす ----
+let ctx = null, bus = null, current = null;
+function unlock(){
+  if(!ctx){ const AC = window.AudioContext || window.webkitAudioContext; ctx = new AC(); }
+  if(ctx.state === 'suspended') ctx.resume();
+}
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+function partial(type, f, t, peak, decay, out, filter){
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  o.connect(g);
+  if(filter){ const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=filter; g.connect(lp); lp.connect(out); }
+  else g.connect(out);
+  o.start(t); o.stop(t + decay + 0.05);
+}
+let noiseBuf = null;
+function noise(t, peak, decay, center, out){
+  if(!noiseBuf){
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0); for(let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const s = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+  s.buffer = noiseBuf; bp.type = 'bandpass'; bp.frequency.value = center; bp.Q.value = .8;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  s.connect(bp); bp.connect(g); g.connect(out);
+  s.start(t); s.stop(t + decay + 0.05);
+}
+function drumHit(f, t, peak, decay, out){
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(f * 1.6, t);
+  o.frequency.exponentialRampToValueAtTime(f, t + 0.04);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  o.connect(g); g.connect(out);
+  o.start(t); o.stop(t + decay + 0.05);
+}
+// 少しずらした音を重ねて、ひろがりを出す
+function layered(type, f, t, peak, attack, hold, release, out, cents, filter){
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + attack);
+  g.gain.setValueAtTime(peak, t + Math.max(attack, hold));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(attack, hold) + release);
+  let dest = out;
+  if(filter){ const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = filter; lp.connect(out); dest = lp; }
+  g.connect(dest);
+  cents.forEach(c => {
+    const o = ctx.createOscillator(); o.type = type; o.frequency.value = f; o.detune.value = c;
+    o.connect(g); o.start(t); o.stop(t + Math.max(attack, hold) + release + .05);
+  });
+}
+function voice(tone, m, t, dur, out, v = 1, nChord = 1){
+  const f = hz(m);
+  const k = v / Math.sqrt(nChord);
+  if(tone === 'brass'){
+    layered('sawtooth', f, t, .07 * k, .03, dur * .8, .2, out, [-5, 5], 2000);
+    layered('square', f / 2, t, .03 * k, .03, dur * .8, .2, out, [0], 900);
+    return;
+  }
+  if(tone === 'musicbox'){
+    partial('sine', f, t, .22 * k, 1.4, out);
+    partial('triangle', f * 2, t, .05 * k, .6, out);
+    partial('sine', f * 4, t, .04 * k, .25, out);
+    return;
+  }
+  if(tone === 'airy'){
+    layered('triangle', f, t, .2 * k, .02, dur * .7, dur * .9 + .4, out, [-7, 7]);
+    layered('sine', f, t, .12 * k, .02, dur * .5, dur + .3, out, [0]);
+    layered('sine', f * 2, t, .03 * k, .01, .02, .35, out, [0]);
+    return;
+  }
+  if(tone === 'pad'){
+    layered('triangle', f, t, .07 * k, .35, dur * .85, .9, out, [-9, 0, 9], 1800);
+    return;
+  }
+  if(tone === 'chime'){
+    partial('sine', f, t, .12 * v, 1.2, out);
+    partial('sine', f * 3, t, .025 * v, .4, out);
+    return;
+  }
+  if(tone === 'lead'){
+    layered('square', f, t, .05 * k, .006, dur * .55, .12, out, [-8, 8], 2600);
+    layered('triangle', f / 2, t, .08 * k, .006, dur * .55, .12, out, [0]);
+    return;
+  }
+  if(tone === 'bass'){
+    layered('triangle', f, t, .3 * v, .005, dur * .45, .1, out, [0]);
+    layered('square', f, t, .03 * v, .005, dur * .3, .08, out, [0], 700);
+    return;
+  }
+  if(tone === 'hat'){ noise(t, .06 * v, .045, 8000, out); return; }
+  if(tone === 'stab'){
+    layered('sawtooth', f, t, .05 * k, .01, dur * .25, .15, out, [-6, 6], 1500);
+    return;
+  }
+  if(tone === 'drum'){
+    const k = v / Math.sqrt(nChord);
+    if(dur > 1){ // どーん：のびる音
+      drumHit(f, t, .45 * k, dur * .9, out);
+      partial('triangle', f, t, .12 * k, dur * 1.1, out);
+      if(m < 50) noise(t, .25 * v, 1.6, 900, out);
+    } else {
+      const d = Math.max(.1, Math.min(dur * .6, .35));
+      drumHit(f, t, .38 * k, d, out);
+      noise(t, .12 * k, Math.min(d, .09), 2400, out);
+    }
+    return;
+  }
+  if(tone === 'soft'){ partial('triangle', f, t, .32, dur * 1.4 + .25, out); }
+  else if(tone === 'sine'){ partial('sine', f, t, .22, Math.min(dur * 1.3, .5) + .08, out); }
+  else if(tone === 'square'){ partial('square', f, t, .07, dur * 1.2 + .15, out, 1800); }
+  else if(tone === 'bell'){
+    partial('sine', f, t, .28, 2.4, out);
+    partial('sine', f * 2.76, t, .08, .9, out);
+    partial('sine', f * 5.4, t, .03, .4, out);
+  } else if(tone === 'wood'){
+    partial('sine', f, t, .38, .4, out);
+    partial('sine', f * 4, t, .06, .09, out);
+  }
+}
+// メロディーを鳴らす本体（画面の表示とは関係なし。コピー用の部品にもそのまま入る）
+function startMelody(mel){
+  unlock(); // タップの中で最初に呼ぶ（iPad対策）
+  if(bus){ const b = bus; b.gain.setTargetAtTime(0, ctx.currentTime, .03); setTimeout(()=>b.disconnect(), 300); }
+  bus = ctx.createGain(); bus.gain.value = .9; bus.connect(ctx.destination);
+  const spb = 60 / mel.bpm, t0 = ctx.currentTime + .06;
+  if(mel.echo){ // やまびこのようなひびき
+    const d = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain(), lp = ctx.createBiquadFilter();
+    d.delayTime.value = spb * .75; fb.gain.value = .3; wet.gain.value = .28; lp.type = 'lowpass'; lp.frequency.value = 2500;
+    bus.connect(d); d.connect(lp); lp.connect(fb); fb.connect(d); lp.connect(wet); wet.connect(ctx.destination);
+    const b = bus; setTimeout(() => { try { d.disconnect(); wet.disconnect(); } catch(e){} }, 12000);
+  }
+  (mel.layers || []).forEach(L => {
+    const lg = ctx.createGain(); lg.gain.value = L.gain; lg.connect(bus);
+    let lt = 0;
+    L.notes.forEach(([m, b, v = 1]) => {
+      if(m !== null){ const ms = [].concat(m); ms.forEach(x => voice(L.tone, x, t0 + lt, b * spb, lg, v, ms.length)); }
+      lt += b * spb;
+    });
+  });
+  let t = 0; const times = [];
+  mel.notes.forEach(([m, b, v = 1]) => {
+    times.push(t0 + t);
+    if(m !== null){ const ms = [].concat(m); ms.forEach(x => voice(mel.tone, x, t0 + t, b * spb, bus, v, ms.length)); }
+    t += b * spb;
+  });
+  return { t0, times, total: t };
+}
+function play(mel){
+  const r = startMelody(mel);
+  current = { mel, t0: r.t0, times: r.times, total: r.total };
+  document.querySelectorAll('.card').forEach(c => c.classList.toggle('playing', c.dataset.id === mel.id));
+  requestAnimationFrame(tick);
+}
+function tick(){
+  if(!current) return;
+  const { mel, t0, times, total } = current;
+  const el = document.querySelector(`.card[data-id="${mel.id}"]`);
+  const now = ctx.currentTime, p = Math.max(0, Math.min(1, (now - t0) / total));
+  el.querySelector('line').setAttribute('x1', 6 + p * 228);
+  el.querySelector('line').setAttribute('x2', 6 + p * 228);
+  el.querySelectorAll('rect').forEach(r => r.classList.toggle('on', now >= times[+r.dataset.i]));
+  if(now < t0 + total + .4){ requestAnimationFrame(tick); }
+  else {
+    el.classList.remove('playing');
+    el.querySelectorAll('rect').forEach(r => r.classList.remove('on'));
+    el.querySelector('line').setAttribute('x1', 6); el.querySelector('line').setAttribute('x2', 6);
+    current = null;
+  }
+}
+
+// ---- 音の形（ピアノロール） ----
+function roll(mel){
+  const total = mel.notes.reduce((s, n) => s + n[1], 0);
+  const ms = mel.notes.filter(n => n[0] !== null).flatMap(n => [].concat(n[0]));
+  const lo = Math.min(...ms) - 2, hi = Math.max(...ms) + 2;
+  let t = 0, rects = '';
+  mel.notes.forEach(([m, b], i) => {
+    if(m !== null){
+      const x = 6 + t / total * 228, w = Math.max(1.5, b / total * 228 - 1.5);
+      [].concat(m).forEach(p => {
+        const y = 54 - (p - lo) / (hi - lo) * 46;
+        rects += `<rect data-i="${i}" x="${x.toFixed(1)}" y="${(y - 3).toFixed(1)}" width="${w.toFixed(1)}" height="6" rx="${Math.min(3, w / 2).toFixed(1)}"/>`;
+      });
+    }
+    t += b;
+  });
+  return `<svg class="roll" viewBox="0 0 240 60" role="img" aria-label="${mel.name}の音の高さと長さ">${rects}<line x1="6" x2="6" y1="4" y2="56"/></svg>`;
+}
+
+function melodyData(mel){
+  const layers = mel.layers ? `, layers:${JSON.stringify(mel.layers)}` : '';
+  return `{ name:'${mel.name}', bpm:${mel.bpm}, tone:'${mel.tone}'${mel.echo ? ', echo:true' : ''}, notes:${JSON.stringify(mel.notes)}${layers} }`;
+}
+// 貼るだけで鳴る部品：音色のプログラム＋メロディーのデータ
+function snippet(list){
+  const names = list.map(m => `//   ${m.id}  …  ${m.name}`).join('\n');
+  const data = list.map(m => `  '${m.id}': ${melodyData(m)}`).join(',\n');
+  return `// ===== メロディー部品（Web Audio API・外部ファイル不要）=====
+// 入っているメロディー:
+${names}
+//
+// 使いかた:
+//   ボタンをタップしたときの処理の中で  playMelody('${list[0].id}')  と呼ぶ。
+//   （iPad/iPhoneは、タップの中で最初に鳴らさないと音が出ないことがある）
+//   戻り値の total は曲の長さ（秒）。止めたいときは stopMelody()。
+
+let ctx = null, bus = null, noiseBuf = null;
+${unlock.toString()}
+const hz = ${hz.toString()};
+${partial.toString()}
+${noise.toString()}
+${drumHit.toString()}
+${layered.toString()}
+${voice.toString()}
+${startMelody.toString()}
+
+const MELODIES = {
+${data}
+};
+function playMelody(id){ return startMelody(MELODIES[id]); }
+function stopMelody(){
+  if(bus && ctx){ const b = bus; b.gain.setTargetAtTime(0, ctx.currentTime, .03); setTimeout(() => b.disconnect(), 300); bus = null; }
+}
+`;
+}
+function copyText(text, msgEl){
+  const done = () => { msgEl.textContent = 'コピーしたよ'; setTimeout(() => msgEl.textContent = '', 2000); };
+  const fallback = () => {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch(e){ msgEl.textContent = 'コピーできなかったよ'; }
+    ta.remove();
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(done, fallback); }
+  else fallback();
+}
+
+const grid = document.getElementById('grid');
+MELODIES.forEach(mel => {
+  const sec = (mel.notes.reduce((s, n) => s + n[1], 0) * 60 / mel.bpm).toFixed(1);
+  const card = document.createElement('article');
+  card.className = 'card'; card.dataset.id = mel.id;
+  card.innerHTML = `
+    <div class="head">
+      <div class="pic" aria-hidden="true">${ICONS[mel.icon]}</div>
+      <div><p class="name">${mel.name}</p><p class="meta">${R(TONE_NAME[mel.tone])}・やく${sec}秒</p></div>
+    </div>
+    ${roll(mel)}
+    <div><p class="label">イメージ</p><p class="text">${R(mel.image)}</p></div>
+    <div><p class="label">{使|つか}うとき</p><p class="text">${R(mel.use)}</p></div>
+    <div class="row">
+      <button class="play" type="button" id="play-${mel.id}">きいてみる</button>
+      <button class="copy" type="button" id="copy-${mel.id}">{部|ぶ}{品|ひん}をコピー</button>
+    </div>
+    <p class="msg" aria-live="polite"></p>`;
+  card.querySelectorAll('.label').forEach(l => l.innerHTML = R(l.innerHTML));
+  card.querySelector('.play').addEventListener('click', () => play(mel));
+  card.querySelectorAll('.copy').forEach(b => b.innerHTML = R(b.innerHTML));
+  card.querySelector('.copy').addEventListener('click', () => copyText(snippet([mel]), card.querySelector('.msg')));
+  grid.appendChild(card);
+});
+document.getElementById('copy-all').addEventListener('click', () => copyText(snippet(MELODIES), document.getElementById('copy-all-msg')));
+</script>
+</body>
+</html>
