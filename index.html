@@ -132,11 +132,19 @@ const MELODIES = [
     notes:Array(60).fill(0).map(() => [77, 1]),
     image:'「カン、カン、カン…」と{鳴|な}りつづける{踏|ふみ}{切|きり}の{音|おと}。30秒{鳴|な}るよ。とちゅうでとめたいときは「とめる」をおしてね。',
     use:'{交|こう}{通|つう}{安|あん}{全|ぜん}の{学|がく}{習|しゅう}や、{電|でん}{車|しゃ}ごっこのとき。' },
-  { id:'laser', name:'レーザービーム', icon:'laser', bpm:150, tone:'laser',
-    notes:[[91,.5],[null,.1],[91,.5],[null,.1],[91,.5],[null,.1],[79,4]],
-    layers:[{ tone:'bass', gain:.6, notes:[[null,1.8],[36,4]] }],
-    image:'「ピュン、ピュン、ピュン、ビビビビーッ！」と、{光|ひかり}のたまを3{回|かい}うってから、{長|なが}いビームをだす{音|おと}だよ。',
-    use:'ヒーローやロボットのとうじょうに。ゲームのとくべつな{技|わざ}のときに。' },
+  { id:'laser', name:'レーザービーム', icon:'laser', bpm:140, tone:'laser',
+    notes:[
+      // ためる：だんだん高く、はやく
+      [48,.5,.5],[52,.5,.6],[55,.5,.7],[60,.5,.8],
+      [64,.25,.9],[67,.25,1],[72,.25,1.1],[76,.25,1.2],
+      [79,.125,1.3],[81,.125,1.35],[84,.125,1.4],[86,.125,1.45],[88,.125,1.5],[91,.125,1.55],[93,.125,1.6],[96,.125,1.65],
+      // はなつ：ビリビリ、バリバリ
+      [72,4,1]],
+    layers:[
+      { tone:'hat', gain:1, notes:Array(32).fill(0).map((_, i) => [0, .125, .2 + 1.3 * i / 31]).concat([[null,4]]) },
+      { tone:'drum', gain:.9, notes:[[null,4],[[36,43],3,1.5]] }],
+    image:'エネルギーがたまって、だんだん{高|たか}く、はやくなっていく{音|おと}。さいごに「ビリビリ、バリバリ！」と、でんきがはしるレーザーをはなつよ。',
+    use:'ヒーローやロボットのとうじょうに。ゲームのとくべつな{技|わざ}や、パワーをためてから{出|だ}すときに。' },
   { id:'muscle', name:'ムキムキパワーアップ', icon:'dumbbell', bpm:130, tone:'brass',
     notes:[[null,1.5],[60,.25],[64,.25],[67,.25],[72,.25],[76,.25],[79,.25],[84,.25],[88,.25],[[60,64,67,72,79],2.5]],
     layers:[
@@ -263,30 +271,50 @@ function voice(tone, m, t, dur, out, v = 1, nChord = 1){
     return;
   }
   if(tone === 'laser'){
-    const long = dur > 0.7, sweep = long ? .2 : Math.min(dur, .22), end = t + dur;
-    const g = ctx.createGain(), lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.Q.value = 5;
-    lp.frequency.setValueAtTime(5000, t);
-    lp.frequency.exponentialRampToValueAtTime(long ? 1800 : 900, t + sweep);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(.12 * k, t + .01);
-    if(long) g.gain.setValueAtTime(.12 * k, end - .1);
-    g.gain.exponentialRampToValueAtTime(0.0001, end + .08);
-    lp.connect(g); g.connect(out);
-    [-10, 10].forEach(c => { // 少しずらした2つの音で、ビームらしいうなりを出す
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth'; o.detune.value = c;
-      o.frequency.setValueAtTime(f * 4, t);
-      o.frequency.exponentialRampToValueAtTime(f, t + sweep);
-      o.connect(lp); o.start(t); o.stop(end + .15);
-    });
-    if(long){ // ビビビビ…と震える
-      const l = ctx.createOscillator(), lg = ctx.createGain();
-      l.frequency.value = 28; lg.gain.value = .05 * k;
-      l.connect(lg); lg.connect(g.gain);
-      l.start(t + sweep); l.stop(end + .1);
+    const end = t + dur;
+    if(dur <= 0.9){
+      // ためる音：ピュイーンと上がり、だんだん強く明るくなる
+      const g = ctx.createGain(), lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.Q.value = 6;
+      lp.frequency.setValueAtTime(600 + 1800 * v, t);
+      lp.frequency.exponentialRampToValueAtTime(1200 + 4200 * v, end);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(.05 * (.5 + v * .6) * k, t + Math.min(.02, dur * .4));
+      g.gain.exponentialRampToValueAtTime(0.0001, end + .03);
+      lp.connect(g); g.connect(out);
+      [-12, 12].forEach(c => {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth'; o.detune.value = c;
+        o.frequency.setValueAtTime(f, t);
+        o.frequency.exponentialRampToValueAtTime(f * 1.5, end);
+        o.connect(lp); o.start(t); o.stop(end + .05);
+      });
+      return;
     }
-    noise(t, .06 * k, .05, 5000, out);
+    // ビーム：ビリビリ、バリバリ。音がゆれて、だんだん高く強くなる
+    const peak = .13 * k, step = .03, n = Math.floor(dur / step);
+    const ws = ctx.createWaveShaper(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+    const curve = new Float32Array(256);
+    for(let i = 0; i < 256; i++){ curve[i] = Math.tanh((i / 128 - 1) * 4); }
+    ws.curve = curve;
+    lp.type = 'lowpass'; lp.frequency.value = 4200; lp.Q.value = 3;
+    ws.connect(lp); lp.connect(g); g.connect(out);
+    const oscs = [['sawtooth', f, -9], ['sawtooth', f, 9], ['square', f / 2, 0]].map(([type, fr, c]) => {
+      const o = ctx.createOscillator(); o.type = type; o.detune.value = c;
+      o.connect(ws); o.start(t); o.stop(end + .2);
+      return [o, fr];
+    });
+    g.gain.setValueAtTime(0.0001, t);
+    for(let i = 0; i <= n; i++){
+      const tt = t + i * step, prog = i / n;
+      oscs.forEach(([o, fr]) => o.frequency.setValueAtTime(fr * (1 + .4 * prog) * (1 + (Math.random() - .5) * .14), tt));
+      g.gain.setValueAtTime(peak * (.3 + .7 * Math.random()) * (.55 + .45 * Math.min(1, prog * 2)), tt);
+    }
+    g.gain.setValueAtTime(peak * .8, end);
+    g.gain.exponentialRampToValueAtTime(0.0001, end + .18);
+    for(let tt = t; tt < end; tt += .035 + Math.random() * .06){
+      noise(tt, (.04 + Math.random() * .07) * k, .02 + Math.random() * .04, 2500 + Math.random() * 6000, out);
+    }
     return;
   }
   if(tone === 'kankan'){
