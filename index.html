@@ -140,8 +140,8 @@ const MELODIES = [
     image:'パワーが{一|いっ}{気|き}に{上|あ}がっていく{音|おと}。{最|さい}{後|ご}は「ジャジャーン！」と{長|なが}くひびいて、ムキムキになるよ。',
     use:'パワーアップしたとき。{体|からだ}を{動|うご}かす{活|かつ}{動|どう}のはじまりや、{力|ちから}じまんの{場|ば}{面|めん}で。' },
   { id:'bakuhatsu', name:'ドッカーン', icon:'bang', bpm:100, tone:'boom',
-    notes:[[40,.5,.8],[null,.25],[31,4,1.4]],
-    image:'「ドッ、カーン！」と{大|おお}きな{音|おと}がはじけて、{低|ひく}い{音|おと}がずっしりひびいたあと、かけらがパラパラととびちるよ。',
+    notes:[[40,.5,.8],[null,.25],[31,5,1.4]],
+    image:'「ドッ、カーン！」と{大|おお}きな{音|おと}がはじけて、{低|ひく}い{音|おと}がおなかにずっしりひびいたあと、かけらがパラパラととびちるよ。',
     use:'{大|おお}きなことがおこったときに。クイズのとっておきの{場|ば}{面|めん}や、ロケットのはっしゃにも。' },
 ];
 
@@ -262,26 +262,43 @@ function voice(tone, m, t, dur, out, v = 1, nChord = 1){
     return;
   }
   if(tone === 'boom'){
-    if(dur <= 1){ // ドッ：小さな前ぶれ
-      drumHit(f, t, .45 * v, .25, out);
-      noise(t, .1 * v, .08, 800, out);
+    // ずっしり重く：スマホやタブレットのスピーカーでも聞こえるように、
+    // ひくい音をゆがませて100〜300Hzあたりに音を足す
+    const comp = ctx.createDynamicsCompressor(), mg = ctx.createGain(), sc = ctx.createWaveShaper();
+    comp.threshold.value = -20; comp.ratio.value = 10; comp.attack.value = .002; comp.release.value = .3;
+    mg.gain.value = 1.7;
+    const sc_c = new Float32Array(256); for(let i = 0; i < 256; i++){ sc_c[i] = Math.tanh((i / 128 - 1) * 1.2); }
+    sc.curve = sc_c;
+    comp.connect(mg); mg.connect(sc); sc.connect(out);
+    if(dur <= 1){ // ドッ：重い前ぶれ
+      drumHit(f * 2, t, .7 * v, .3, comp);
+      noise(t, .2 * v, .1, 500, comp);
       return;
     }
-    // カーン：ばくはつ
-    noise(t, .35 * v, .35, 1500, out);            // ドカッというしょうげき
-    noise(t, .15 * v, .15, 5000, out);
-    const o = ctx.createOscillator(), g = ctx.createGain();  // ひくくおちる音
-    o.type = 'sine';
-    o.frequency.setValueAtTime(f * 3, t);
-    o.frequency.exponentialRampToValueAtTime(f * .6, t + .6);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(.45 * v / 1.4, t + .01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur * .8);
-    o.connect(g); g.connect(out); o.start(t); o.stop(t + dur);
-    noise(t + .03, .3 * v, dur * .8, 220, out);   // ゴゴゴというひびき
-    for(let tt = t + .35; tt < t + dur * .75; tt += .06 + Math.random() * .1){ // パラパラとびちるかけら
+    const sat = ctx.createWaveShaper(), lpf = ctx.createBiquadFilter();
+    const sat_c = new Float32Array(256); for(let i = 0; i < 256; i++){ sat_c[i] = Math.tanh((i / 128 - 1) * 3); }
+    sat.curve = sat_c; lpf.type = 'lowpass'; lpf.frequency.value = 700;
+    sat.connect(lpf); lpf.connect(comp);
+    noise(t, .5 * v, .25, 1200, comp);            // ドカッというしょうげき
+    noise(t, .25 * v, .12, 4000, comp);
+    [[f * 4, f * 1.1, .9, 'sine'], [f * 8, f * 2.2, .35, 'triangle']].forEach(([f0, f1, pk, type]) => { // 重くおちる音
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(f1, t + .8);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(pk * v / 1.4, t + .006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur * .9);
+      o.connect(g); g.connect(sat); o.start(t); o.stop(t + dur);
+    });
+    noise(t + .02, .9 * v, dur * .9, 120, comp);  // ゴゴゴというひびき
+    noise(t + .02, .6 * v, dur * .7, 300, comp);
+    // もういちど、ドーンとおくれてひびく
+    drumHit(f * 2, t + .75, .45 * v, .7, comp);
+    noise(t + .75, .3 * v, .5, 400, comp);
+    for(let tt = t + .3; tt < t + dur * .8; tt += .05 + Math.random() * .09){ // パラパラとびちるかけら
       const fade = 1 - (tt - t) / dur;
-      noise(tt, (.05 + Math.random() * .08) * fade * v, .03 + Math.random() * .05, 1000 + Math.random() * 3500, out);
+      noise(tt, (.06 + Math.random() * .09) * fade * v, .04 + Math.random() * .08, 600 + Math.random() * 2400, comp);
     }
     return;
   }
