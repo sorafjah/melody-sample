@@ -83,10 +83,8 @@ const ICONS = {
   jump:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 38c4-16 10-16 14 0M18 38c4-20 12-20 16 0M34 38c2-10 6-10 8 0"/></svg>',
   moon:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"><path d="M30 6a17 17 0 1 0 12 26A15 15 0 0 1 30 6z"/></svg>',
   maru:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4"><circle cx="24" cy="24" r="15"/></svg>',
-  batsu:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M12 12l24 24M36 12L12 36"/></svg>',
   funya:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12c4 0 4 4 8 4s4-4 8-4 4 6 8 8 4 8 8 12 4 6 4 8"/><path d="M38 40l4 2 1-4"/></svg>',
   dumbbell:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 24h20"/><rect x="8" y="14" width="6" height="20" rx="2"/><rect x="34" y="14" width="6" height="20" rx="2"/><path d="M4 19v10M44 19v10"/></svg>',
-  bang:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"><path d="M24 4l4 10 10-6-3 11 11 2-9 7 7 9-11-1-1 11-8-8-8 8-1-11-11 1 7-9-9-7 11-2-3-11 10 6z"/></svg>',
   crossing:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 20v24"/><path d="M8 6l32 12M40 6L8 18"/><circle cx="15" cy="28" r="4"/><circle cx="33" cy="28" r="4"/><path d="M19 28h10"/></svg>',
   sun:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 32a12 12 0 0 1 24 0"/><path d="M4 32h40M10 38h28M24 10v4M10 18l3 3M38 18l-3 3"/></svg>'
 };
@@ -120,18 +118,10 @@ const MELODIES = [
     notes:[[88,.5],[84,.5],[88,.5],[84,.5],[88,.5],[84,2]],
     image:'「ピンポン、ピンポン、ピンポーン！」と{鳴|な}る、クイズの{正|せい}{解|かい}の{音|おと}。{明|あか}るくひびくよ。',
     use:'クイズや{問|もん}{題|だい}で{正|せい}{解|かい}したとき。' },
-  { id:'fuseikai', name:'ブッブー', icon:'batsu', bpm:130, tone:'buzzer',
-    notes:[[46,.6],[null,.2],[46,.6],[null,.2],[46,2]],
-    image:'「ブッ、ブッ、ブー」と{鳴|な}る、ひくいブザーの{音|おと}。{大|おお}きすぎない{音|おん}{量|りょう}にしてあるよ。',
-    use:'クイズでまちがえたとき。ゲームのように{楽|たの}しむ{場|ば}{面|めん}で。' },
   { id:'zannen', name:'ざんねーん', icon:'funya', bpm:92, tone:'funya',
     notes:[[67,.8],[66,.8],[65,.8],[64,3]],
     image:'「ふにゃ、ふにゃ、ふにゃ〜ん」と、ずり{落|お}ちていくような{音|おと}。{最|さい}{後|ご}はゆらゆらゆれるよ。',
     use:'おしかったとき。「ざんねーん！」とわらって{次|つぎ}にいけるような{場|ば}{面|めん}で。' },
-  { id:'fumikiri', name:'ふみきり', icon:'crossing', bpm:120, tone:'kankan',
-    notes:Array(60).fill(0).map(() => [77, 1]),
-    image:'「カン、カン、カン…」と{鳴|な}りつづける{踏|ふみ}{切|きり}の{音|おと}。30秒{鳴|な}るよ。とちゅうでとめたいときは「とめる」をおしてね。',
-    use:'{交|こう}{通|つう}{安|あん}{全|ぜん}の{学|がく}{習|しゅう}や、{電|でん}{車|しゃ}ごっこのとき。' },
   { id:'muscle', name:'ムキムキパワーアップ', icon:'dumbbell', bpm:130, tone:'brass',
     notes:[[60,.25],[64,.25],[67,.25],[72,.25],[76,.25],[79,.25],[84,.25],[88,.25],[[60,64,67,72,79],4]],
     layers:[
@@ -139,13 +129,16 @@ const MELODIES = [
       { tone:'chime', gain:.5, notes:[[null,2],[96,.5],[100,.5],[103,3]] }],
     image:'パワーが{一|いっ}{気|き}に{上|あ}がっていく{音|おと}。{最|さい}{後|ご}は「ジャジャーン！」と{長|なが}くひびいて、ムキムキになるよ。',
     use:'パワーアップしたとき。{体|からだ}を{動|うご}かす{活|かつ}{動|どう}のはじまりや、{力|ちから}じまんの{場|ば}{面|めん}で。' },
-  { id:'bakuhatsu', name:'ドッカーン', icon:'bang', bpm:100, tone:'boom',
-    notes:[[40,.5,.8],[null,.25],[31,5,1.4]],
-    image:'「ドッ、カーン！」と{大|おお}きな{音|おと}がはじけて、{低|ひく}い{音|おと}がおなかにずっしりひびいたあと、かけらがパラパラととびちるよ。',
-    use:'{大|おお}きなことがおこったときに。クイズのとっておきの{場|ば}{面|めん}や、ロケットのはっしゃにも。' },
+  { id:'fumikiri', name:'ふみきり', icon:'crossing', bpm:120, tone:'kankan', last:true,
+    notes:Array(60).fill(0).map(() => [77, 1]),
+    image:'「カン、カン、カン…」と{鳴|な}りつづける{踏|ふみ}{切|きり}の{音|おと}。30秒{鳴|な}るよ。とちゅうでとめたいときは「とめる」をおしてね。',
+    use:'{交|こう}{通|つう}{安|あん}{全|ぜん}の{学|がく}{習|しゅう}や、{電|でん}{車|しゃ}ごっこのとき。' },
 ];
 
-const TONE_NAME = {boom:'ばくはつの{音|おと}', pinpon:'チャイムの{音|おと}', buzzer:'ブザーの{音|おと}', funya:'ふにゃふにゃした{音|おと}', kankan:'{踏|ふみ}{切|きり}の{音|おと}', brass:'ラッパの{音|おと}', musicbox:'オルゴールの{音|おと}', soft:'やわらかい{音|おと}', sine:'すんだ{音|おと}', square:'ピコピコした{音|おと}', bell:'かねの{音|おと}', airy:'ふんわりした{音|おと}', lead:'ピコピコした{音|おと}＋リズム', wood:'{木|き}の{音|おと}', drum:'{太|たい}{鼓|こ}の{音|おと}'};
+// last:true の曲（ふみきり）は、新しい曲を足しても、いつも一番うしろに並ぶ
+MELODIES.sort((a, b) => (a.last ? 1 : 0) - (b.last ? 1 : 0));
+
+const TONE_NAME = {pinpon:'チャイムの{音|おと}', funya:'ふにゃふにゃした{音|おと}', kankan:'{踏|ふみ}{切|きり}の{音|おと}', brass:'ラッパの{音|おと}', musicbox:'オルゴールの{音|おと}', soft:'やわらかい{音|おと}', sine:'すんだ{音|おと}', square:'ピコピコした{音|おと}', bell:'かねの{音|おと}', airy:'ふんわりした{音|おと}', lead:'ピコピコした{音|おと}＋リズム', wood:'{木|き}の{音|おと}', drum:'{太|たい}{鼓|こ}の{音|おと}'};
 
 // ---- 音を鳴らす ----
 let ctx = null, bus = null, current = null;
@@ -234,11 +227,6 @@ function voice(tone, m, t, dur, out, v = 1, nChord = 1){
     partial('sine', f * 2, t, .06 * k, .4, out);
     return;
   }
-  if(tone === 'buzzer'){
-    layered('sawtooth', f, t, .11 * k, .01, dur * .9, .05, out, [-12, 12], 1400);
-    layered('square', f, t, .04 * k, .01, dur * .9, .05, out, [3], 900);
-    return;
-  }
   if(tone === 'funya'){
     const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
     o.type = 'sawtooth'; lp.type = 'lowpass'; lp.Q.value = 4;
@@ -259,47 +247,6 @@ function voice(tone, m, t, dur, out, v = 1, nChord = 1){
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(lp); lp.connect(g); g.connect(out);
     o.start(t); o.stop(t + dur + .05);
-    return;
-  }
-  if(tone === 'boom'){
-    // ずっしり重く：スマホやタブレットのスピーカーでも聞こえるように、
-    // ひくい音をゆがませて100〜300Hzあたりに音を足す
-    const comp = ctx.createDynamicsCompressor(), mg = ctx.createGain(), sc = ctx.createWaveShaper();
-    comp.threshold.value = -20; comp.ratio.value = 10; comp.attack.value = .002; comp.release.value = .3;
-    mg.gain.value = 1.7;
-    const sc_c = new Float32Array(256); for(let i = 0; i < 256; i++){ sc_c[i] = Math.tanh((i / 128 - 1) * 1.2); }
-    sc.curve = sc_c;
-    comp.connect(mg); mg.connect(sc); sc.connect(out);
-    if(dur <= 1){ // ドッ：重い前ぶれ
-      drumHit(f * 2, t, .7 * v, .3, comp);
-      noise(t, .2 * v, .1, 500, comp);
-      return;
-    }
-    const sat = ctx.createWaveShaper(), lpf = ctx.createBiquadFilter();
-    const sat_c = new Float32Array(256); for(let i = 0; i < 256; i++){ sat_c[i] = Math.tanh((i / 128 - 1) * 3); }
-    sat.curve = sat_c; lpf.type = 'lowpass'; lpf.frequency.value = 700;
-    sat.connect(lpf); lpf.connect(comp);
-    noise(t, .5 * v, .25, 1200, comp);            // ドカッというしょうげき
-    noise(t, .25 * v, .12, 4000, comp);
-    [[f * 4, f * 1.1, .9, 'sine'], [f * 8, f * 2.2, .35, 'triangle']].forEach(([f0, f1, pk, type]) => { // 重くおちる音
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = type;
-      o.frequency.setValueAtTime(f0, t);
-      o.frequency.exponentialRampToValueAtTime(f1, t + .8);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(pk * v / 1.4, t + .006);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur * .9);
-      o.connect(g); g.connect(sat); o.start(t); o.stop(t + dur);
-    });
-    noise(t + .02, .9 * v, dur * .9, 120, comp);  // ゴゴゴというひびき
-    noise(t + .02, .6 * v, dur * .7, 300, comp);
-    // もういちど、ドーンとおくれてひびく
-    drumHit(f * 2, t + .75, .45 * v, .7, comp);
-    noise(t + .75, .3 * v, .5, 400, comp);
-    for(let tt = t + .3; tt < t + dur * .8; tt += .05 + Math.random() * .09){ // パラパラとびちるかけら
-      const fade = 1 - (tt - t) / dur;
-      noise(tt, (.06 + Math.random() * .09) * fade * v, .04 + Math.random() * .08, 600 + Math.random() * 2400, comp);
-    }
     return;
   }
   if(tone === 'kankan'){
