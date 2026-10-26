@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>メロディサンプル</title>
+<title>メロディ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
@@ -61,7 +61,7 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 <body>
 
 <div class="wrap">
-  <h1>メロディサンプル</h1>
+  <h1>メロディ</h1>
   <p class="lead">いろいろな<ruby>場<rt>ば</rt></ruby><ruby>面<rt>めん</rt></ruby>で<ruby>使<rt>つか</rt></ruby>える、メロディーや<ruby>効<rt>こう</rt></ruby><ruby>果<rt>か</rt></ruby><ruby>音<rt>おん</rt></ruby>を<ruby>集<rt>あつ</rt></ruby>めたよ。「きいてみる」をおすと<ruby>鳴<rt>な</rt></ruby>るよ。<ruby>鳴<rt>な</rt></ruby>っているときにもう<ruby>一<rt>いち</rt></ruby><ruby>度<rt>ど</rt></ruby>おすと、とまるよ。</p>
   <div class="grid" id="grid"></div>
   <div class="row">
@@ -455,58 +455,37 @@ async function loadVoiceFor(name){
     return buf;
   } catch(e){ return null; }
 }
-function startSilent(mel){ // 音は出さずに、光るバーだけを曲のタイミングで進める
-  const t0 = performance.now() / 1000 + .05, spb = 60 / mel.bpm;
-  let t = 0; const times = [];
-  mel.notes.forEach(([m, b]) => { times.push(t0 + t); t += b * spb; });
-  return { t0, times, total: t };
-}
 function stopPlaying(){
   if(current){ const id = current.mel.id; stopAll(); resetCard(id); current = null; }
 }
-function setupRecorder(card, mel){
+// 録音の部品。cfg.key(名前)＝とっておく名前、cfg.phrase(名前)＝よみあげる言葉、cfg.mainPlay＝ふだんの再生ボタン
+function setupRecorder(card, cfg){
   const nameIn = card.querySelector('.name-in'), recBtn = card.querySelector('.rec-btn'),
         playBtn = card.querySelector('.rec-play'), delBtn = card.querySelector('.rec-del'),
         msg = card.querySelector('.rec-msg');
-  const mainPlay = card.querySelector('.play');
-  let recorder = null, timer = null, starting = null;
+  let recorder = null, timer = null;
   const curName = () => nameIn.value.trim();
+  const curKey = () => cfg.key(curName());
   async function refresh(){
     const name = curName();
-    if(!name){ msg.textContent = 'おなまえをいれると、こえもはいるよ。'; playBtn.hidden = true; delBtn.hidden = true; recBtn.textContent = 'こえをろくおん'; return; }
-    const buf = await loadVoiceFor(name);
+    if(!name){ msg.textContent = cfg.emptyMsg; playBtn.hidden = true; delBtn.hidden = true; recBtn.textContent = 'こえをろくおん'; return; }
+    const buf = await loadVoiceFor(cfg.key(name));
     if(name !== curName() || recorder) return;
     playBtn.hidden = !buf; delBtn.hidden = !buf;
     recBtn.textContent = buf ? 'とりなおす' : 'こえをろくおん';
     msg.textContent = buf
       ? `「${name}」のろくおんがあるよ（${buf.duration.toFixed(1)}びょう）。これをつかうよ。`
-      : `ろくおんがないので、きかいのこえでよむよ。じぶんのこえでいれるなら、「${nameText(name)}、ハッピーバースデー！」とろくおんしてね。`;
+      : `ろくおんがないので、きかいのこえでよむよ。じぶんのこえでいれるなら、「${cfg.phrase(name)}」とろくおんしてね。`;
   }
   recBtn.addEventListener('click', async () => {
-    if(starting){ starting.cancel = true; return; }           // カウントダウン中は、やめる
-    if(recorder){ recorder.stop(); return; }                    // ろくおん中は、おわる
-    const name = curName();
+    if(recorder){ recorder.stop(); return; }
+    const name = curName(), key = curKey();
     if(!name){ msg.textContent = 'おなまえをいれてね'; return; }
     if(!window.MediaRecorder || !navigator.mediaDevices){ msg.textContent = 'このブラウザでは、ろくおんできないよ。'; return; }
-    stopPlaying();
+    stopPlaying(); stopAll();
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
     catch(e){ msg.textContent = 'マイクがつかえないよ。ブラウザのせっていで、マイクをゆるしてね。'; return; }
-    // 3・2・1のあと、曲は鳴らさずに、光るバーだけを流して録音する
-    const st = { cancel: false }; starting = st;
-    recBtn.textContent = '● やめる'; recBtn.classList.add('recording');
-    playBtn.hidden = true; delBtn.hidden = true; mainPlay.disabled = true;
-    for(const n of [3, 2, 1]){
-      if(st.cancel) break;
-      msg.textContent = `${n}…`;
-      await new Promise(r => setTimeout(r, 700));
-    }
-    starting = null;
-    if(st.cancel){
-      stream.getTracks().forEach(t => t.stop());
-      mainPlay.disabled = false; recBtn.classList.remove('recording');
-      await refresh(); return;
-    }
     const types = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
     const mime = (MediaRecorder.isTypeSupported && types.find(t => MediaRecorder.isTypeSupported(t))) || '';
     const chunks = [];
@@ -516,34 +495,30 @@ function setupRecorder(card, mel){
     mr.onstop = async () => {
       clearTimeout(timer);
       stream.getTracks().forEach(t => t.stop());
-      recorder = null; recBtn.classList.remove('recording'); mainPlay.disabled = false;
-      if(current && current.silent){ resetCard(mel.id); current = null; }
+      recorder = null; recBtn.classList.remove('recording');
       try {
         const blob = new Blob(chunks, { type: mr.mimeType || mime || 'audio/webm' });
         const data = await blob.arrayBuffer();
-        voiceBufs.delete(name);
-        await VoiceDB.put(name, { type: blob.type, data });
+        voiceBufs.delete(key);
+        await VoiceDB.put(key, { type: blob.type, data });
       } catch(e){ msg.textContent = 'ほぞんできなかったよ。'; }
       await refresh();
     };
     mr.start();
-    const r = startSilent(mel);
-    current = { mel, t0: r.t0, times: r.times, total: r.total, silent: true };
-    card.classList.add('playing');
-    requestAnimationFrame(tick);
-    recBtn.textContent = '● おわる';
-    msg.textContent = `ろくおんちゅう…きょくはならないよ。ひかるバーにあわせて、「${nameText(name)}、ハッピーバースデー！」とはなしてね。おわったら「おわる」をおしてね。`;
-    timer = setTimeout(() => { if(recorder) recorder.stop(); }, (r.total + 1) * 1000);
+    recBtn.textContent = '● おわる'; recBtn.classList.add('recording');
+    playBtn.hidden = true; delBtn.hidden = true;
+    msg.textContent = `ろくおんちゅう…「${cfg.phrase(name)}」とはなしてね。おわったら「おわる」をおしてね。`;
+    timer = setTimeout(() => { if(recorder) recorder.stop(); }, 12000);
   });
   playBtn.addEventListener('click', () => {
-    const buf = voiceBufs.get(curName()); if(!buf) return;
-    stopPlaying(); unlock();
+    const buf = voiceBufs.get(curKey()); if(!buf) return;
+    stopPlaying(); stopAll(); unlock();
     const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
     voiceSrc = src;
   });
   delBtn.addEventListener('click', async () => {
-    const name = curName();
-    voiceBufs.delete(name); await VoiceDB.del(name); await refresh();
+    const key = curKey();
+    voiceBufs.delete(key); await VoiceDB.del(key); await refresh();
   });
   nameIn.addEventListener('input', refresh);
   refresh();
@@ -596,7 +571,7 @@ function tick(){
   if(!current) return;
   const { mel, t0, times, total } = current;
   const el = document.querySelector(`.card[data-id="${mel.id}"]`);
-  const now = current.silent ? performance.now() / 1000 : ctx.currentTime, p = Math.max(0, Math.min(1, (now - t0) / total));
+  const now = ctx.currentTime, p = Math.max(0, Math.min(1, (now - t0) / total));
   el.querySelector('line').setAttribute('x1', 6 + p * 228);
   el.querySelector('line').setAttribute('x2', 6 + p * 228);
   el.querySelectorAll('rect').forEach(r => r.classList.toggle('on', now >= times[+r.dataset.i]));
@@ -701,11 +676,60 @@ MELODIES.forEach(mel => {
     <p class="msg copy-msg" aria-live="polite"></p>`;
   card.querySelectorAll('.label').forEach(l => l.innerHTML = R(l.innerHTML));
   card.querySelector('.play').addEventListener('click', () => play(mel));
-  if(mel.voice) setupRecorder(card, mel);
+  if(mel.voice) setupRecorder(card, {
+    key: n => n, phrase: n => nameText(n) + '、ハッピーバースデー！',
+    emptyMsg: 'おなまえをいれると、こえもはいるよ。'
+  });
   card.querySelectorAll('.copy').forEach(b => b.innerHTML = R(b.innerHTML));
   card.querySelector('.copy-parts').addEventListener('click', () => copyText(snippet([mel]), card.querySelector('.copy-msg')));
   grid.appendChild(card);
 });
+// ---- メロディなし：こえだけのカード（誕生日の曲とは、べつにとっておく） ----
+(function(){
+  const card = document.createElement('article');
+  card.className = 'card'; card.id = 'voice-only';
+  card.innerHTML = `
+    <div class="head">
+      <div class="pic" aria-hidden="true">${ICONS.bell}</div>
+      <div><p class="name">{声|こえ}だけ（メロディなし）</p><p class="meta">ハッピーバースデーの{声|こえ}</p></div>
+    </div>
+    <div><p class="label">イメージ</p><p class="text">{曲|きょく}は{鳴|な}らさずに、「{名前|なまえ}さん、ハッピーバースデー！」の{声|こえ}だけを{聞|き}くよ。{自分|じぶん}の{声|こえ}を{録音|ろくおん}することもできるよ。</p></div>
+    <div class="opt">
+      <label for="name-solo">おなまえ</label>
+      <input type="text" id="name-solo" class="name-in" value="" placeholder="なまえをいれてね" maxlength="12" autocomplete="off">
+    </div>
+    <div class="opt">
+      <button class="copy rec-btn" type="button" id="rec-solo">こえをろくおん</button>
+      <button class="copy rec-play" type="button" id="recplay-solo" hidden>きく</button>
+      <button class="copy rec-del" type="button" id="recdel-solo" hidden>けす</button>
+    </div>
+    <p class="msg rec-msg" aria-live="polite"></p>
+    <div class="row">
+      <button class="play" type="button" id="play-solo">きいてみる</button>
+    </div>
+    <p class="msg solo-msg" aria-live="polite"></p>`;
+  card.querySelectorAll('.label,.name,.meta,.text').forEach(l => l.innerHTML = R(l.innerHTML));
+  const nameIn = card.querySelector('.name-in'), soloMsg = card.querySelector('.solo-msg'), playMain = card.querySelector('.play');
+  setupRecorder(card, {
+    key: n => 'solo:' + n, phrase: n => nameText(n) + '、ハッピーバースデー！',
+    emptyMsg: 'おなまえをいれると、こえをろくおんできるよ。'
+  });
+  // 「きいてみる」：ろくおんがあればそれを、なければきかいのこえで
+  playMain.addEventListener('click', () => {
+    const name = nameIn.value.trim();
+    if(!name){ soloMsg.textContent = 'おなまえをいれてね'; return; }
+    soloMsg.textContent = '';
+    stopPlaying(); stopAll(); unlock();
+    const buf = voiceBufs.get('solo:' + name);
+    if(buf){
+      const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
+      voiceSrc = src;
+    } else {
+      sayText(nameText(name) + '、ハッピーバースデー！');
+    }
+  });
+  grid.appendChild(card);
+})();
 document.getElementById('copy-all').addEventListener('click', () => copyText(snippet(MELODIES), document.getElementById('copy-all-msg')));
 </script>
 </body>
