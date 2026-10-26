@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>メロディ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,6 +13,7 @@
   --bg:#F3F7F6; --card:#FFFFFF; --ink:#26332F; --sub:#5D6E69; --line:#D8E3E0;
   --accent:#2F8F7B; --accent-ink:#FFFFFF; --soft:#E3F1ED; --note:#B9CFC9;
   --font:"BIZ UDPGothic","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#141B19; --card:#1D2725; --ink:#E6EEEB; --sub:#9DB0AA; --line:#2E3C39;
@@ -22,7 +23,7 @@
   --accent:#5CC2AB; --accent-ink:#0F1715; --soft:#233531; --note:#43605A; color-scheme:dark}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{background:var(--bg);color:var(--ink)}
-body{font-family:var(--font);margin:0;padding:24px 16px 40px;touch-action:manipulation;-webkit-user-select:none;user-select:none;line-height:1.7}
+body{font-family:var(--font);margin:0;padding:calc(24px + env(safe-area-inset-top,0px)) 16px calc(40px + env(safe-area-inset-bottom,0px));touch-action:manipulation;-webkit-user-select:none;user-select:none;line-height:1.7}
 rt{font-size:.5em;color:var(--sub)}
 .wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
 h1{font-size:1.5rem;margin:0;text-wrap:balance}
@@ -46,14 +47,15 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 .play{background:var(--accent);color:var(--accent-ink);flex:1}
 .copy{background:var(--card);color:var(--accent)}
 .opt{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.opt.col{flex-direction:column;align-items:stretch;gap:6px}
 .opt label{font-size:.85rem;font-weight:700;color:var(--accent)}
-.opt input[type=text]{flex:1;min-width:8em;min-height:48px;font:inherit;font-size:16px;padding:0 12px;border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);-webkit-user-select:text;user-select:text}
-.opt input::placeholder{color:var(--sub);opacity:1}
-.opt input[type=text]:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.opt input[type=text],.opt textarea,.opt select{flex:1;min-width:8em;min-height:48px;font:inherit;font-size:16px;padding:0 12px;border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);-webkit-user-select:text;user-select:text}
+.opt textarea{padding:10px 12px;resize:vertical;line-height:1.6}
+.opt select{padding-right:8px}
+.opt input::placeholder,.opt textarea::placeholder{color:var(--sub);opacity:1}
+.opt input[type=text]:focus-visible,.opt textarea:focus-visible,.opt select:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 .opt .chk{display:flex;align-items:center;gap:8px;min-height:48px;font-size:.95rem;color:var(--ink)}
 .opt input[type=checkbox]{width:28px;height:28px;accent-color:var(--accent)}
-.rec-btn.recording{background:var(--accent);color:var(--accent-ink)}
-.rec-msg{margin:0}
 .msg{font-size:.85rem;color:var(--sub);min-height:1.4em;margin:0}
 .foot{font-size:.85rem;color:var(--sub);margin:0;max-width:70ch}
 </style>
@@ -72,6 +74,9 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 </div>
 
 <script>
+// iPadのピンチ拡大をふせぐ
+document.addEventListener('gesturestart', e => e.preventDefault());
+
 const R = s => s.replace(/\{([^|}]+)\|([^}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>');
 
 const ICONS = {
@@ -353,7 +358,7 @@ function startMelody(mel){
     const d = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain(), lp = ctx.createBiquadFilter();
     d.delayTime.value = spb * .75; fb.gain.value = .3; wet.gain.value = .28; lp.type = 'lowpass'; lp.frequency.value = 2500;
     bus.connect(d); d.connect(lp); lp.connect(fb); fb.connect(d); lp.connect(wet); wet.connect(ctx.destination);
-    const b = bus; setTimeout(() => { try { d.disconnect(); wet.disconnect(); } catch(e){} }, 12000);
+    setTimeout(() => { try { d.disconnect(); wet.disconnect(); } catch(e){} }, 12000);
   }
   (mel.layers || []).forEach(L => {
     const lg = ctx.createGain(); lg.gain.value = L.gain; lg.connect(bus);
@@ -371,161 +376,70 @@ function startMelody(mel){
   });
   return { t0, times, total: t };
 }
-// ---- 名前をよみあげる ----
-// 1. その名前の録音があれば、録音（本物の声）を使う
-// 2. なければ、端末の読み上げの声を使う
-let jaVoice = null;
+
+// ---- よみあげ（端末に入っている声を使う） ----
+// iPhone/iPadで「拡張」「プレミアム」の声をダウンロードしていれば、それを上にならべて、さいしょにえらぶ
+const VOICE_KEY = 'melody-tts-voice';
+let jaVoices = [], jaVoice = null, voiceTries = 0;
+function voiceScore(v){
+  const s = v.name + ' ' + v.voiceURI;
+  return (/premium|プレミアム/i.test(s) ? 4 : 0)
+       + (/enhanced|拡張|高品質|neural|natural/i.test(s) ? 3 : 0)
+       + (v.localService ? 1 : 0);
+}
 function loadVoice(){
   try {
     const vs = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang));
-    const score = v => (/premium|enhanced|siri|neural|natural|kyoko|otoya|o-ren/i.test(v.name + ' ' + v.voiceURI) ? 2 : 0) + (v.localService ? 1 : 0);
-    vs.sort((a, b) => score(b) - score(a));
-    jaVoice = vs[0] || null;
+    vs.sort((a, b) => voiceScore(b) - voiceScore(a));
+    jaVoices = vs;
+    let saved = null; try { saved = localStorage.getItem(VOICE_KEY); } catch(e){}
+    jaVoice = vs.find(v => v.voiceURI === saved) || vs[0] || null;
+    fillVoiceSelect();
+    // iOSでは声のリストがあとから届くことがあるので、少しのあいだ見なおす
+    if(!vs.length && voiceTries++ < 10) setTimeout(loadVoice, 300);
   } catch(e){}
+}
+function fillVoiceSelect(){
+  const sel = document.getElementById('tts-voice');
+  if(!sel) return;
+  sel.innerHTML = '';
+  if(!jaVoices.length){
+    const o = document.createElement('option'); o.textContent = 'にほんごのこえが みつからないよ'; o.disabled = true; o.selected = true;
+    sel.appendChild(o); return;
+  }
+  jaVoices.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v.voiceURI;
+    o.textContent = (voiceScore(v) >= 3 ? '★ ' : '') + v.name;
+    if(jaVoice && v.voiceURI === jaVoice.voiceURI) o.selected = true;
+    sel.appendChild(o);
+  });
 }
 if('speechSynthesis' in window){
   loadVoice();
   try { speechSynthesis.addEventListener('voiceschanged', loadVoice); } catch(e){}
 }
-function sayText(text){ // タップの中で同期的に呼ぶ（iPad対策）
-  if(!('speechSynthesis' in window)) return;
+function sayText(text, onEnd){ // タップの中で同期的に呼ぶ（iPad対策）
+  if(!('speechSynthesis' in window)){ if(onEnd) onEnd(); return false; }
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ja-JP'; if(jaVoice) u.voice = jaVoice;
-    u.rate = .95; u.pitch = 1.05;
+    u.rate = .95; u.pitch = 1;
+    if(onEnd){ u.onend = onEnd; u.onerror = onEnd; }
     speechSynthesis.speak(u);
-  } catch(e){}
+    return true;
+  } catch(e){ if(onEnd) onEnd(); return false; }
 }
 function nameText(name){
   return /(さん|くん|君|ちゃん|先生|様)$/.test(name) ? name : name + 'さん';
 }
 
-// ---- 録音した声を、名前ごとにとっておく（IndexedDB） ----
-const VoiceDB = (() => {
-  let dbp = null; const mem = new Map();
-  function open(){
-    if(!dbp) dbp = new Promise(res => {
-      try {
-        const r = indexedDB.open('melody-sample-voices', 1);
-        r.onupgradeneeded = () => r.result.createObjectStore('voices');
-        r.onsuccess = () => res(r.result);
-        r.onerror = () => res(null);
-      } catch(e){ res(null); }
-    });
-    return dbp;
-  }
-  async function get(k){
-    const db = await open();
-    if(!db) return mem.get(k) || null;
-    return new Promise(res => {
-      try {
-        const q = db.transaction('voices').objectStore('voices').get(k);
-        q.onsuccess = () => res(q.result || mem.get(k) || null);
-        q.onerror = () => res(mem.get(k) || null);
-      } catch(e){ res(mem.get(k) || null); }
-    });
-  }
-  async function put(k, v){
-    mem.set(k, v);
-    const db = await open(); if(!db) return;
-    try { db.transaction('voices', 'readwrite').objectStore('voices').put(v, k); } catch(e){}
-  }
-  async function del(k){
-    mem.delete(k);
-    const db = await open(); if(!db) return;
-    try { db.transaction('voices', 'readwrite').objectStore('voices').delete(k); } catch(e){}
-  }
-  return { get, put, del };
-})();
-const voiceBufs = new Map();   // 名前 → 録音（音として使える形）
-let voiceSrc = null;
-function ensureCtx(){
-  if(!ctx){ const AC = window.AudioContext || window.webkitAudioContext; ctx = new AC(); }
-  return ctx;
-}
-async function loadVoiceFor(name){
-  if(!name) return null;
-  if(voiceBufs.has(name)) return voiceBufs.get(name);
-  const rec = await VoiceDB.get(name);
-  if(!rec) return null;
-  try {
-    const buf = await new Promise((res, rej) => ensureCtx().decodeAudioData(rec.data.slice(0), res, rej));
-    voiceBufs.set(name, buf);
-    return buf;
-  } catch(e){ return null; }
-}
 function stopPlaying(){
   if(current){ const id = current.mel.id; stopAll(); resetCard(id); current = null; }
 }
-// 録音の部品。cfg.key(名前)＝とっておく名前、cfg.phrase(名前)＝よみあげる言葉、cfg.mainPlay＝ふだんの再生ボタン
-function setupRecorder(card, cfg){
-  const nameIn = card.querySelector('.name-in'), recBtn = card.querySelector('.rec-btn'),
-        playBtn = card.querySelector('.rec-play'), delBtn = card.querySelector('.rec-del'),
-        msg = card.querySelector('.rec-msg');
-  let recorder = null, timer = null;
-  const curName = () => nameIn.value.trim();
-  const curKey = () => cfg.key(curName());
-  async function refresh(){
-    const name = curName();
-    if(!name){ msg.textContent = cfg.emptyMsg; playBtn.hidden = true; delBtn.hidden = true; recBtn.textContent = 'こえをろくおん'; return; }
-    const buf = await loadVoiceFor(cfg.key(name));
-    if(name !== curName() || recorder) return;
-    playBtn.hidden = !buf; delBtn.hidden = !buf;
-    recBtn.textContent = buf ? 'とりなおす' : 'こえをろくおん';
-    msg.textContent = buf
-      ? `「${name}」のろくおんがあるよ（${buf.duration.toFixed(1)}びょう）。これをつかうよ。`
-      : `ろくおんがないので、きかいのこえでよむよ。じぶんのこえでいれるなら、「${cfg.phrase(name)}」とろくおんしてね。`;
-  }
-  recBtn.addEventListener('click', async () => {
-    if(recorder){ recorder.stop(); return; }
-    const name = curName(), key = curKey();
-    if(!name){ msg.textContent = 'おなまえをいれてね'; return; }
-    if(!window.MediaRecorder || !navigator.mediaDevices){ msg.textContent = 'このブラウザでは、ろくおんできないよ。'; return; }
-    stopPlaying(); stopAll();
-    let stream;
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-    catch(e){ msg.textContent = 'マイクがつかえないよ。ブラウザのせっていで、マイクをゆるしてね。'; return; }
-    const types = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
-    const mime = (MediaRecorder.isTypeSupported && types.find(t => MediaRecorder.isTypeSupported(t))) || '';
-    const chunks = [];
-    const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-    recorder = mr;
-    mr.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
-    mr.onstop = async () => {
-      clearTimeout(timer);
-      stream.getTracks().forEach(t => t.stop());
-      recorder = null; recBtn.classList.remove('recording');
-      try {
-        const blob = new Blob(chunks, { type: mr.mimeType || mime || 'audio/webm' });
-        const data = await blob.arrayBuffer();
-        voiceBufs.delete(key);
-        await VoiceDB.put(key, { type: blob.type, data });
-      } catch(e){ msg.textContent = 'ほぞんできなかったよ。'; }
-      await refresh();
-    };
-    mr.start();
-    recBtn.textContent = '● おわる'; recBtn.classList.add('recording');
-    playBtn.hidden = true; delBtn.hidden = true;
-    msg.textContent = `ろくおんちゅう…「${cfg.phrase(name)}」とはなしてね。おわったら「おわる」をおしてね。`;
-    timer = setTimeout(() => { if(recorder) recorder.stop(); }, 12000);
-  });
-  playBtn.addEventListener('click', () => {
-    const buf = voiceBufs.get(curKey()); if(!buf) return;
-    stopPlaying(); stopAll(); unlock();
-    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
-    voiceSrc = src;
-  });
-  delBtn.addEventListener('click', async () => {
-    const key = curKey();
-    voiceBufs.delete(key); await VoiceDB.del(key); await refresh();
-  });
-  nameIn.addEventListener('input', refresh);
-  refresh();
-}
 function stopAll(){
   try { if('speechSynthesis' in window) speechSynthesis.cancel(); } catch(e){}
-  try { if(voiceSrc){ voiceSrc.stop(); voiceSrc = null; } } catch(e){}
   if(bus && ctx){ const b = bus; b.gain.setTargetAtTime(0, ctx.currentTime, .03); setTimeout(() => b.disconnect(), 300); bus = null; }
 }
 function resetCard(id){
@@ -547,19 +461,12 @@ function play(mel){
   if(mel.voice){
     const name = el.querySelector('.name-in').value.trim();
     if(el.querySelector('.voice-on').checked && name){
-      const buf = voiceBufs.get(name);
-      let span = 4.5;
-      if(buf){ // 録音したじぶんの声
-        const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination);
-        src.start(r.t0); voiceSrc = src; span = buf.duration + 1;
-      } else { // 録音がないときは、きかいの声
-        sayText(nameText(name) + '、ハッピーバースデー！');
-      }
+      sayText(nameText(name) + '、ハッピーバースデー！');
       if(bus){ // こえが聞こえやすいように、はじめは音楽を小さく
         const n = ctx.currentTime;
         bus.gain.cancelScheduledValues(n);
         bus.gain.setValueAtTime(.45, n);
-        bus.gain.linearRampToValueAtTime(.9, n + span);
+        bus.gain.linearRampToValueAtTime(.9, n + 4.5);
       }
     }
   }
@@ -662,13 +569,7 @@ MELODIES.forEach(mel => {
       <label for="name-${mel.id}">おなまえ</label>
       <input type="text" id="name-${mel.id}" class="name-in" value="" placeholder="なまえをいれてね" maxlength="12" autocomplete="off">
       <label class="chk" for="voice-${mel.id}"><input type="checkbox" id="voice-${mel.id}" class="voice-on" checked>こえもいれる</label>
-    </div>
-    <div class="opt">
-      <button class="copy rec-btn" type="button" id="rec-${mel.id}">こえをろくおん</button>
-      <button class="copy rec-play" type="button" id="recplay-${mel.id}" hidden>きく</button>
-      <button class="copy rec-del" type="button" id="recdel-${mel.id}" hidden>けす</button>
-    </div>
-    <p class="msg rec-msg" aria-live="polite"></p>` : ''}
+    </div>` : ''}
     <div class="row">
       <button class="play" type="button" id="play-${mel.id}">きいてみる</button>
       <button class="copy copy-parts" type="button" id="copy-${mel.id}">{部|ぶ}{品|ひん}をコピー</button>
@@ -676,61 +577,59 @@ MELODIES.forEach(mel => {
     <p class="msg copy-msg" aria-live="polite"></p>`;
   card.querySelectorAll('.label').forEach(l => l.innerHTML = R(l.innerHTML));
   card.querySelector('.play').addEventListener('click', () => play(mel));
-  if(mel.voice) setupRecorder(card, {
-    key: n => n, phrase: n => nameText(n) + '、ハッピーバースデー！',
-    emptyMsg: 'おなまえをいれると、こえもはいるよ。'
-  });
   card.querySelectorAll('.copy').forEach(b => b.innerHTML = R(b.innerHTML));
   card.querySelector('.copy-parts').addEventListener('click', () => copyText(snippet([mel]), card.querySelector('.copy-msg')));
   grid.appendChild(card);
 });
-// ---- メロディなし：こえだけのカード（誕生日の曲とは、べつにとっておく） ----
+
+// ---- よみあげカード：いれた文字をそのまま声でよむ ----
 (function(){
   const card = document.createElement('article');
-  card.className = 'card'; card.id = 'voice-only';
-  card.innerHTML = `
+  card.className = 'card'; card.id = 'tts';
+  card.innerHTML = R(`
     <div class="head">
-      <div class="pic" aria-hidden="true">${ICONS.bell}</div>
-      <div><p class="name">{声|こえ}だけ（メロディなし）</p><p class="meta">ハッピーバースデーの{声|こえ}</p></div>
+      <div class="pic" aria-hidden="true">${ICONS.call}</div>
+      <div><p class="name">よみあげ</p><p class="meta">いれた{文|も}{字|じ}を{声|こえ}でよむよ</p></div>
     </div>
-    <div><p class="label">イメージ</p><p class="text">{曲|きょく}は{鳴|な}らさずに、「{名前|なまえ}さん、ハッピーバースデー！」の{声|こえ}だけを{聞|き}くよ。{自分|じぶん}の{声|こえ}を{録音|ろくおん}することもできるよ。</p></div>
-    <div class="opt">
-      <label for="name-solo">おなまえ</label>
-      <input type="text" id="name-solo" class="name-in" value="" placeholder="なまえをいれてね" maxlength="12" autocomplete="off">
+    <div><p class="label">イメージ</p><p class="text">{書|か}いた{言|こと}{葉|ば}を、iPadやiPhoneに{入|はい}っている{声|こえ}でよみあげるよ。</p></div>
+    <div class="opt col">
+      <label for="tts-text">よむ{言|こと}{葉|ば}</label>
+      <textarea id="tts-text" rows="3" maxlength="300" placeholder="ここに ことばを いれてね" autocomplete="off"></textarea>
     </div>
-    <div class="opt">
-      <button class="copy rec-btn" type="button" id="rec-solo">こえをろくおん</button>
-      <button class="copy rec-play" type="button" id="recplay-solo" hidden>きく</button>
-      <button class="copy rec-del" type="button" id="recdel-solo" hidden>けす</button>
+    <div class="opt col">
+      <label for="tts-voice">{声|こえ}のしゅるい（★はきれいな{声|こえ}）</label>
+      <select id="tts-voice"></select>
     </div>
-    <p class="msg rec-msg" aria-live="polite"></p>
     <div class="row">
-      <button class="play" type="button" id="play-solo">きいてみる</button>
+      <button class="play" type="button" id="play-tts">よみあげる</button>
     </div>
-    <p class="msg solo-msg" aria-live="polite"></p>`;
-  card.querySelectorAll('.label,.name,.meta,.text').forEach(l => l.innerHTML = R(l.innerHTML));
-  const nameIn = card.querySelector('.name-in'), soloMsg = card.querySelector('.solo-msg'), playMain = card.querySelector('.play');
-  setupRecorder(card, {
-    key: n => 'solo:' + n, phrase: n => nameText(n) + '、ハッピーバースデー！',
-    emptyMsg: 'おなまえをいれると、こえをろくおんできるよ。'
-  });
-  // 「きいてみる」：ろくおんがあればそれを、なければきかいのこえで
-  playMain.addEventListener('click', () => {
-    const name = nameIn.value.trim();
-    if(!name){ soloMsg.textContent = 'おなまえをいれてね'; return; }
-    soloMsg.textContent = '';
-    stopPlaying(); stopAll(); unlock();
-    const buf = voiceBufs.get('solo:' + name);
-    if(buf){
-      const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
-      voiceSrc = src;
-    } else {
-      sayText(nameText(name) + '、ハッピーバースデー！');
-    }
-  });
+    <p class="msg tts-msg" aria-live="polite"></p>`);
   grid.appendChild(card);
+  fillVoiceSelect();
+
+  const textIn = card.querySelector('#tts-text'), sel = card.querySelector('#tts-voice'),
+        btn = card.querySelector('#play-tts'), msg = card.querySelector('.tts-msg');
+  let speaking = false;
+  const reset = () => { speaking = false; btn.textContent = 'よみあげる'; card.classList.remove('playing'); };
+
+  sel.addEventListener('change', () => {
+    const v = jaVoices.find(x => x.voiceURI === sel.value);
+    if(v){ jaVoice = v; try { localStorage.setItem(VOICE_KEY, v.voiceURI); } catch(e){} }
+  });
+  btn.addEventListener('click', () => {
+    if(speaking){ try { speechSynthesis.cancel(); } catch(e){} reset(); return; }
+    const text = textIn.value.trim();
+    if(!text){ msg.textContent = 'ことばをいれてね'; return; }
+    if(!('speechSynthesis' in window)){ msg.textContent = 'このブラウザでは、よみあげができないよ。'; return; }
+    msg.textContent = '';
+    stopPlaying(); stopAll(); unlock();
+    speaking = true; btn.textContent = 'とめる'; card.classList.add('playing');
+    sayText(text, reset);
+  });
 })();
+
 document.getElementById('copy-all').addEventListener('click', () => copyText(snippet(MELODIES), document.getElementById('copy-all-msg')));
 </script>
+
 </body>
 </html>
