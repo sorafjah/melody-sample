@@ -45,6 +45,12 @@ button{font-family:inherit;font-size:1rem;font-weight:700;min-height:48px;min-wi
 button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 .play{background:var(--accent);color:var(--accent-ink);flex:1}
 .copy{background:var(--card);color:var(--accent)}
+.opt{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.opt label{font-size:.85rem;font-weight:700;color:var(--accent)}
+.opt input[type=text]{flex:1;min-width:8em;min-height:48px;font:inherit;font-size:16px;padding:0 12px;border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);-webkit-user-select:text;user-select:text}
+.opt input[type=text]:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.opt .chk{display:flex;align-items:center;gap:8px;min-height:48px;font-size:.95rem;color:var(--ink)}
+.opt input[type=checkbox]{width:28px;height:28px;accent-color:var(--accent)}
 .msg{font-size:.85rem;color:var(--sub);min-height:1.4em;margin:0}
 .foot{font-size:.85rem;color:var(--sub);margin:0;max-width:70ch}
 </style>
@@ -130,7 +136,7 @@ const MELODIES = [
       { tone:'chime', gain:.5, notes:[[null,2],[96,.5],[100,.5],[103,3]] }],
     image:'パワーが{一|いっ}{気|き}に{上|あ}がっていく{音|おと}。{最|さい}{後|ご}は「ジャジャーン！」と{長|なが}くひびいて、ムキムキになるよ。',
     use:'パワーアップしたとき。{体|からだ}を{動|うご}かす{活|かつ}{動|どう}のはじまりや、{力|ちから}じまんの{場|ば}{面|めん}で。' },
-  { id:'birthday', name:'ハッピーバースデー', icon:'cake', bpm:112, tone:'musicbox', echo:true,
+  { id:'birthday', name:'ハッピーバースデー', icon:'cake', bpm:112, tone:'musicbox', echo:true, voice:true,
     notes:[
       [67,.75],[67,.25],[69,1],[67,1],[72,1],[71,2],
       [67,.75],[67,.25],[69,1],[67,1],[74,1],[72,2],
@@ -139,7 +145,7 @@ const MELODIES = [
     layers:[
       { tone:'pad', gain:.55, notes:[[[48, 52, 55, 60],4],[[43, 47, 50, 53],3],[[48, 52, 55, 60],6],[[48, 52, 55, 60],4],[[41, 45, 48, 53],4],[[48, 52, 55, 60],2],[[48, 52, 55, 60],3]] },
       { tone:'chime', gain:.5, notes:[[null,23],[96,.5],[100,.5],[103,2]] }],
-    image:'みんなでうたう、おたんじょうびの{歌|うた}。オルゴールの{音|おと}で、やさしくひびいて、さいごはキラキラ{光|ひか}るよ。',
+    image:'みんなでうたう、おたんじょうびの{歌|うた}。オルゴールの{音|おと}で、やさしくひびいて、さいごはキラキラ{光|ひか}るよ。{名前|なまえ}をいれると、「〇〇さん、ハッピーバースデー」と{声|こえ}もはいるよ。',
     use:'おたんじょうびのお{祝|いわ}いに。{朝|あさ}の{会|かい}や{帰|かえ}りの{会|かい}で「おめでとう」をつたえるときに。' },
   { id:'fumikiri', name:'ふみきり', icon:'crossing', bpm:120, tone:'kankan', last:true,
     notes:Array(60).fill(0).map(() => [77, 1]),
@@ -362,7 +368,30 @@ function startMelody(mel){
   });
   return { t0, times, total: t };
 }
+// ---- 名前をよみあげる（日本語の声） ----
+let jaVoice = null;
+function loadVoice(){
+  try { jaVoice = speechSynthesis.getVoices().find(v => /^ja/i.test(v.lang)) || null; } catch(e){}
+}
+if('speechSynthesis' in window){
+  loadVoice();
+  try { speechSynthesis.addEventListener('voiceschanged', loadVoice); } catch(e){}
+}
+function sayText(text){ // タップの中で同期的に呼ぶ（iPad対策）
+  if(!('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ja-JP'; if(jaVoice) u.voice = jaVoice;
+    u.rate = .95; u.pitch = 1.1;
+    speechSynthesis.speak(u);
+  } catch(e){}
+}
+function nameText(name){
+  return /(さん|くん|君|ちゃん|先生|様)$/.test(name) ? name : name + 'さん';
+}
 function stopAll(){
+  try { if('speechSynthesis' in window) speechSynthesis.cancel(); } catch(e){}
   if(bus && ctx){ const b = bus; b.gain.setTargetAtTime(0, ctx.currentTime, .03); setTimeout(() => b.disconnect(), 300); bus = null; }
 }
 function resetCard(id){
@@ -378,9 +407,22 @@ function play(mel){
     stopAll(); resetCard(mel.id); current = null; return;
   }
   if(current) resetCard(current.mel.id);
+  const el = document.querySelector(`.card[data-id="${mel.id}"]`);
   const r = startMelody(mel);
   current = { mel, t0: r.t0, times: r.times, total: r.total };
-  const el = document.querySelector(`.card[data-id="${mel.id}"]`);
+  if(mel.voice){
+    const name = el.querySelector('.name-in').value.trim();
+    try { localStorage.setItem('melody-name-' + mel.id, name); } catch(e){}
+    if(el.querySelector('.voice-on').checked && name){
+      sayText(nameText(name) + '、ハッピーバースデー');
+      if(bus){ // こえが聞こえやすいように、はじめは音楽を小さく
+        const n = ctx.currentTime;
+        bus.gain.cancelScheduledValues(n);
+        bus.gain.setValueAtTime(.45, n);
+        bus.gain.linearRampToValueAtTime(.9, n + 4.5);
+      }
+    }
+  }
   el.classList.add('playing');
   el.querySelector('.play').textContent = 'とめる';
   requestAnimationFrame(tick);
@@ -463,6 +505,11 @@ function copyText(text, msgEl){
   else fallback();
 }
 
+function savedName(id){
+  let v = '';
+  try { v = localStorage.getItem('melody-name-' + id) || ''; } catch(e){}
+  return (v || 'きずな').replace(/"/g, '');
+}
 const grid = document.getElementById('grid');
 MELODIES.forEach(mel => {
   const sec = (mel.notes.reduce((s, n) => s + n[1], 0) * 60 / mel.bpm).toFixed(1);
@@ -476,6 +523,11 @@ MELODIES.forEach(mel => {
     ${roll(mel)}
     <div><p class="label">イメージ</p><p class="text">${R(mel.image)}</p></div>
     <div><p class="label">{使|つか}うとき</p><p class="text">${R(mel.use)}</p></div>
+    ${mel.voice ? `<div class="opt">
+      <label for="name-${mel.id}">おなまえ</label>
+      <input type="text" id="name-${mel.id}" class="name-in" value="${savedName(mel.id)}" maxlength="12" autocomplete="off">
+      <label class="chk" for="voice-${mel.id}"><input type="checkbox" id="voice-${mel.id}" class="voice-on" checked>こえもいれる</label>
+    </div>` : ''}
     <div class="row">
       <button class="play" type="button" id="play-${mel.id}">きいてみる</button>
       <button class="copy" type="button" id="copy-${mel.id}">{部|ぶ}{品|ひん}をコピー</button>
