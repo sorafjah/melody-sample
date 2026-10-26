@@ -85,6 +85,7 @@ const ICONS = {
   maru:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4"><circle cx="24" cy="24" r="15"/></svg>',
   funya:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12c4 0 4 4 8 4s4-4 8-4 4 6 8 8 4 8 8 12 4 6 4 8"/><path d="M38 40l4 2 1-4"/></svg>',
   dumbbell:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 24h20"/><rect x="8" y="14" width="6" height="20" rx="2"/><rect x="34" y="14" width="6" height="20" rx="2"/><path d="M4 19v10M44 19v10"/></svg>',
+  cake:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 42h36"/><path d="M9 42V28h30v14"/><path d="M9 28c4 0 4 4 7.5 4s3.500-4 7.500-4 4 4 7.500 4 3.500-4 7.500-4"/><path d="M24 28V19"/><path d="M24 7c3.500 3 3.500 7 0 9-3.500-2-3.500-6 0-9z"/></svg>',
   crossing:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 20v24"/><path d="M8 6l32 12M40 6L8 18"/><circle cx="15" cy="28" r="4"/><circle cx="33" cy="28" r="4"/><path d="M19 28h10"/></svg>',
   sun:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 32a12 12 0 0 1 24 0"/><path d="M4 32h40M10 38h28M24 10v4M10 18l3 3M38 18l-3 3"/></svg>'
 };
@@ -129,6 +130,17 @@ const MELODIES = [
       { tone:'chime', gain:.5, notes:[[null,2],[96,.5],[100,.5],[103,3]] }],
     image:'パワーが{一|いっ}{気|き}に{上|あ}がっていく{音|おと}。{最|さい}{後|ご}は「ジャジャーン！」と{長|なが}くひびいて、ムキムキになるよ。',
     use:'パワーアップしたとき。{体|からだ}を{動|うご}かす{活|かつ}{動|どう}のはじまりや、{力|ちから}じまんの{場|ば}{面|めん}で。' },
+  { id:'birthday', name:'ハッピーバースデー', icon:'cake', bpm:112, tone:'musicbox', echo:true,
+    notes:[
+      [67,.75],[67,.25],[69,1],[67,1],[72,1],[71,2],
+      [67,.75],[67,.25],[69,1],[67,1],[74,1],[72,2],
+      [67,.75],[67,.25],[79,1],[76,1],[72,1],[71,1],[69,2],
+      [77,.75],[77,.25],[76,1],[72,1],[74,1],[72,3]],
+    layers:[
+      { tone:'pad', gain:.55, notes:[[[48, 52, 55, 60],4],[[43, 47, 50, 53],3],[[48, 52, 55, 60],6],[[48, 52, 55, 60],4],[[41, 45, 48, 53],4],[[48, 52, 55, 60],2],[[48, 52, 55, 60],3]] },
+      { tone:'chime', gain:.5, notes:[[null,23],[96,.5],[100,.5],[103,2]] }],
+    image:'みんなでうたう、おたんじょうびの{歌|うた}。オルゴールの{音|おと}で、やさしくひびいて、さいごはキラキラ{光|ひか}るよ。',
+    use:'おたんじょうびのお{祝|いわ}いに。{朝|あさ}の{会|かい}や{帰|かえ}りの{会|かい}で「おめでとう」をつたえるときに。' },
   { id:'fumikiri', name:'ふみきり', icon:'crossing', bpm:120, tone:'kankan', last:true,
     notes:Array(60).fill(0).map(() => [77, 1]),
     image:'「カン、カン、カン…」と{鳴|な}りつづける{踏|ふみ}{切|きり}の{音|おと}。30秒{鳴|な}るよ。とちゅうでとめたいときは「とめる」をおしてね。',
