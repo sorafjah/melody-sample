@@ -51,6 +51,8 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 .opt input[type=text]:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 .opt .chk{display:flex;align-items:center;gap:8px;min-height:48px;font-size:.95rem;color:var(--ink)}
 .opt input[type=checkbox]{width:28px;height:28px;accent-color:var(--accent)}
+.rec-btn.recording{background:var(--accent);color:var(--accent-ink)}
+.rec-msg{margin:0}
 .msg{font-size:.85rem;color:var(--sub);min-height:1.4em;margin:0}
 .foot{font-size:.85rem;color:var(--sub);margin:0;max-width:70ch}
 </style>
@@ -368,10 +370,17 @@ function startMelody(mel){
   });
   return { t0, times, total: t };
 }
-// ---- 名前をよみあげる（日本語の声） ----
+// ---- 名前をよみあげる ----
+// 1. その名前の録音があれば、録音（本物の声）を使う
+// 2. なければ、端末の読み上げの声を使う
 let jaVoice = null;
 function loadVoice(){
-  try { jaVoice = speechSynthesis.getVoices().find(v => /^ja/i.test(v.lang)) || null; } catch(e){}
+  try {
+    const vs = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang));
+    const score = v => (/premium|enhanced|siri|neural|natural|kyoko|otoya|o-ren/i.test(v.name + ' ' + v.voiceURI) ? 2 : 0) + (v.localService ? 1 : 0);
+    vs.sort((a, b) => score(b) - score(a));
+    jaVoice = vs[0] || null;
+  } catch(e){}
 }
 if('speechSynthesis' in window){
   loadVoice();
@@ -383,15 +392,137 @@ function sayText(text){ // タップの中で同期的に呼ぶ（iPad対策）
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ja-JP'; if(jaVoice) u.voice = jaVoice;
-    u.rate = 1.05; u.pitch = 1.25;
+    u.rate = .95; u.pitch = 1.05;
     speechSynthesis.speak(u);
   } catch(e){}
 }
 function nameText(name){
   return /(さん|くん|君|ちゃん|先生|様)$/.test(name) ? name : name + 'さん';
 }
+
+// ---- 録音した声を、名前ごとにとっておく（IndexedDB） ----
+const VoiceDB = (() => {
+  let dbp = null; const mem = new Map();
+  function open(){
+    if(!dbp) dbp = new Promise(res => {
+      try {
+        const r = indexedDB.open('melody-sample-voices', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('voices');
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => res(null);
+      } catch(e){ res(null); }
+    });
+    return dbp;
+  }
+  async function get(k){
+    const db = await open();
+    if(!db) return mem.get(k) || null;
+    return new Promise(res => {
+      try {
+        const q = db.transaction('voices').objectStore('voices').get(k);
+        q.onsuccess = () => res(q.result || mem.get(k) || null);
+        q.onerror = () => res(mem.get(k) || null);
+      } catch(e){ res(mem.get(k) || null); }
+    });
+  }
+  async function put(k, v){
+    mem.set(k, v);
+    const db = await open(); if(!db) return;
+    try { db.transaction('voices', 'readwrite').objectStore('voices').put(v, k); } catch(e){}
+  }
+  async function del(k){
+    mem.delete(k);
+    const db = await open(); if(!db) return;
+    try { db.transaction('voices', 'readwrite').objectStore('voices').delete(k); } catch(e){}
+  }
+  return { get, put, del };
+})();
+const voiceBufs = new Map();   // 名前 → 録音（音として使える形）
+let voiceSrc = null;
+function ensureCtx(){
+  if(!ctx){ const AC = window.AudioContext || window.webkitAudioContext; ctx = new AC(); }
+  return ctx;
+}
+async function loadVoiceFor(name){
+  if(!name) return null;
+  if(voiceBufs.has(name)) return voiceBufs.get(name);
+  const rec = await VoiceDB.get(name);
+  if(!rec) return null;
+  try {
+    const buf = await new Promise((res, rej) => ensureCtx().decodeAudioData(rec.data.slice(0), res, rej));
+    voiceBufs.set(name, buf);
+    return buf;
+  } catch(e){ return null; }
+}
+function stopPlaying(){
+  if(current){ const id = current.mel.id; stopAll(); resetCard(id); current = null; }
+}
+function setupRecorder(card){
+  const nameIn = card.querySelector('.name-in'), recBtn = card.querySelector('.rec-btn'),
+        playBtn = card.querySelector('.rec-play'), delBtn = card.querySelector('.rec-del'),
+        msg = card.querySelector('.rec-msg');
+  let recorder = null, timer = null;
+  const curName = () => nameIn.value.trim();
+  async function refresh(){
+    const name = curName();
+    if(!name){ msg.textContent = 'おなまえをいれてね'; playBtn.hidden = true; delBtn.hidden = true; return; }
+    const buf = await loadVoiceFor(name);
+    if(name !== curName() || recorder) return;
+    playBtn.hidden = !buf; delBtn.hidden = !buf;
+    recBtn.textContent = buf ? 'とりなおす' : 'こえをろくおん';
+    msg.textContent = buf
+      ? `「${name}」のろくおんがあるよ（${buf.duration.toFixed(1)}びょう）。これをつかうよ。`
+      : `ろくおんがないので、きかいのこえでよむよ。じぶんのこえでいれるなら、「${nameText(name)}、ハッピーバースデー！」とろくおんしてね。`;
+  }
+  recBtn.addEventListener('click', async () => {
+    if(recorder){ recorder.stop(); return; }
+    const name = curName();
+    if(!name){ msg.textContent = 'おなまえをいれてね'; return; }
+    if(!window.MediaRecorder || !navigator.mediaDevices){ msg.textContent = 'このブラウザでは、ろくおんできないよ。'; return; }
+    stopPlaying();
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch(e){ msg.textContent = 'マイクがつかえないよ。ブラウザのせっていで、マイクをゆるしてね。'; return; }
+    const types = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
+    const mime = (MediaRecorder.isTypeSupported && types.find(t => MediaRecorder.isTypeSupported(t))) || '';
+    const chunks = [];
+    const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    recorder = mr;
+    mr.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = async () => {
+      clearTimeout(timer);
+      stream.getTracks().forEach(t => t.stop());
+      recorder = null; recBtn.classList.remove('recording');
+      try {
+        const blob = new Blob(chunks, { type: mr.mimeType || mime || 'audio/webm' });
+        const data = await blob.arrayBuffer();
+        voiceBufs.delete(name);
+        await VoiceDB.put(name, { type: blob.type, data });
+      } catch(e){ msg.textContent = 'ほぞんできなかったよ。'; }
+      await refresh();
+    };
+    mr.start();
+    recBtn.textContent = '● おわる'; recBtn.classList.add('recording');
+    playBtn.hidden = true; delBtn.hidden = true;
+    msg.textContent = `ろくおんちゅう…「${nameText(name)}、ハッピーバースデー！」とはなして、おわったら「おわる」をおしてね。`;
+    timer = setTimeout(() => { if(recorder) recorder.stop(); }, 12000);
+  });
+  playBtn.addEventListener('click', () => {
+    const buf = voiceBufs.get(curName()); if(!buf) return;
+    stopPlaying(); unlock();
+    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
+    voiceSrc = src;
+  });
+  delBtn.addEventListener('click', async () => {
+    const name = curName();
+    voiceBufs.delete(name); await VoiceDB.del(name); await refresh();
+  });
+  nameIn.addEventListener('input', refresh);
+  refresh();
+}
 function stopAll(){
   try { if('speechSynthesis' in window) speechSynthesis.cancel(); } catch(e){}
+  try { if(voiceSrc){ voiceSrc.stop(); voiceSrc = null; } } catch(e){}
   if(bus && ctx){ const b = bus; b.gain.setTargetAtTime(0, ctx.currentTime, .03); setTimeout(() => b.disconnect(), 300); bus = null; }
 }
 function resetCard(id){
@@ -414,12 +545,19 @@ function play(mel){
     const name = el.querySelector('.name-in').value.trim();
     try { localStorage.setItem('melody-name-' + mel.id, name); } catch(e){}
     if(el.querySelector('.voice-on').checked && name){
-      sayText(nameText(name) + '、ハッピーバースデー！');
+      const buf = voiceBufs.get(name);
+      let span = 4.5;
+      if(buf){ // 録音したじぶんの声
+        const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination);
+        src.start(r.t0); voiceSrc = src; span = buf.duration + 1;
+      } else { // 録音がないときは、きかいの声
+        sayText(nameText(name) + '、ハッピーバースデー！');
+      }
       if(bus){ // こえが聞こえやすいように、はじめは音楽を小さく
         const n = ctx.currentTime;
         bus.gain.cancelScheduledValues(n);
         bus.gain.setValueAtTime(.45, n);
-        bus.gain.linearRampToValueAtTime(.9, n + 4.5);
+        bus.gain.linearRampToValueAtTime(.9, n + span);
       }
     }
   }
@@ -527,16 +665,23 @@ MELODIES.forEach(mel => {
       <label for="name-${mel.id}">おなまえ</label>
       <input type="text" id="name-${mel.id}" class="name-in" value="${savedName(mel.id)}" maxlength="12" autocomplete="off">
       <label class="chk" for="voice-${mel.id}"><input type="checkbox" id="voice-${mel.id}" class="voice-on" checked>こえもいれる</label>
-    </div>` : ''}
+    </div>
+    <div class="opt">
+      <button class="copy rec-btn" type="button" id="rec-${mel.id}">こえをろくおん</button>
+      <button class="copy rec-play" type="button" id="recplay-${mel.id}" hidden>きく</button>
+      <button class="copy rec-del" type="button" id="recdel-${mel.id}" hidden>けす</button>
+    </div>
+    <p class="msg rec-msg" aria-live="polite"></p>` : ''}
     <div class="row">
       <button class="play" type="button" id="play-${mel.id}">きいてみる</button>
-      <button class="copy" type="button" id="copy-${mel.id}">{部|ぶ}{品|ひん}をコピー</button>
+      <button class="copy copy-parts" type="button" id="copy-${mel.id}">{部|ぶ}{品|ひん}をコピー</button>
     </div>
-    <p class="msg" aria-live="polite"></p>`;
+    <p class="msg copy-msg" aria-live="polite"></p>`;
   card.querySelectorAll('.label').forEach(l => l.innerHTML = R(l.innerHTML));
   card.querySelector('.play').addEventListener('click', () => play(mel));
+  if(mel.voice) setupRecorder(card);
   card.querySelectorAll('.copy').forEach(b => b.innerHTML = R(b.innerHTML));
-  card.querySelector('.copy').addEventListener('click', () => copyText(snippet([mel]), card.querySelector('.msg')));
+  card.querySelector('.copy-parts').addEventListener('click', () => copyText(snippet([mel]), card.querySelector('.copy-msg')));
   grid.appendChild(card);
 });
 document.getElementById('copy-all').addEventListener('click', () => copyText(snippet(MELODIES), document.getElementById('copy-all-msg')));
