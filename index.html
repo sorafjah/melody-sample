@@ -465,7 +465,7 @@ function setupRecorder(card){
   const curName = () => nameIn.value.trim();
   async function refresh(){
     const name = curName();
-    if(!name){ msg.textContent = 'おなまえをいれてね'; playBtn.hidden = true; delBtn.hidden = true; return; }
+    if(!name){ msg.textContent = 'おなまえをいれると、こえもはいるよ。'; playBtn.hidden = true; delBtn.hidden = true; recBtn.textContent = 'こえをろくおん'; return; }
     const buf = await loadVoiceFor(name);
     if(name !== curName() || recorder) return;
     playBtn.hidden = !buf; delBtn.hidden = !buf;
@@ -543,7 +543,6 @@ function play(mel){
   current = { mel, t0: r.t0, times: r.times, total: r.total };
   if(mel.voice){
     const name = el.querySelector('.name-in').value.trim();
-    try { localStorage.setItem('melody-name-' + mel.id, name); } catch(e){}
     if(el.querySelector('.voice-on').checked && name){
       const buf = voiceBufs.get(name);
       let span = 4.5;
@@ -643,11 +642,6 @@ function copyText(text, msgEl){
   else fallback();
 }
 
-function savedName(id){
-  let v = '';
-  try { v = localStorage.getItem('melody-name-' + id) || ''; } catch(e){}
-  return (v || 'きずな').replace(/"/g, '');
-}
 const grid = document.getElementById('grid');
 MELODIES.forEach(mel => {
   const sec = (mel.notes.reduce((s, n) => s + n[1], 0) * 60 / mel.bpm).toFixed(1);
@@ -663,7 +657,7 @@ MELODIES.forEach(mel => {
     <div><p class="label">{使|つか}うとき</p><p class="text">${R(mel.use)}</p></div>
     ${mel.voice ? `<div class="opt">
       <label for="name-${mel.id}">おなまえ</label>
-      <input type="text" id="name-${mel.id}" class="name-in" value="${savedName(mel.id)}" maxlength="12" autocomplete="off">
+      <input type="text" id="name-${mel.id}" class="name-in" value="" placeholder="れい：きずな" maxlength="12" autocomplete="off">
       <label class="chk" for="voice-${mel.id}"><input type="checkbox" id="voice-${mel.id}" class="voice-on" checked>こえもいれる</label>
     </div>
     <div class="opt">
