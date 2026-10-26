@@ -48,6 +48,7 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 .opt{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .opt label{font-size:.85rem;font-weight:700;color:var(--accent)}
 .opt input[type=text]{flex:1;min-width:8em;min-height:48px;font:inherit;font-size:16px;padding:0 12px;border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);-webkit-user-select:text;user-select:text}
+.opt input::placeholder{color:var(--sub);opacity:1}
 .opt input[type=text]:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 .opt .chk{display:flex;align-items:center;gap:8px;min-height:48px;font-size:.95rem;color:var(--ink)}
 .opt input[type=checkbox]{width:28px;height:28px;accent-color:var(--accent)}
@@ -657,7 +658,7 @@ MELODIES.forEach(mel => {
     <div><p class="label">{使|つか}うとき</p><p class="text">${R(mel.use)}</p></div>
     ${mel.voice ? `<div class="opt">
       <label for="name-${mel.id}">おなまえ</label>
-      <input type="text" id="name-${mel.id}" class="name-in" value="" placeholder="れい：きずな" maxlength="12" autocomplete="off">
+      <input type="text" id="name-${mel.id}" class="name-in" value="" placeholder="なまえをいれてね" maxlength="12" autocomplete="off">
       <label class="chk" for="voice-${mel.id}"><input type="checkbox" id="voice-${mel.id}" class="voice-on" checked>こえもいれる</label>
     </div>
     <div class="opt">
