@@ -622,7 +622,9 @@ MELODIES.forEach(mel => {
       <button class="play" type="button" id="play-tts">よみあげる</button>
     </div>
     <p class="msg tts-msg" aria-live="polite"></p>`);
-  grid.appendChild(card);
+  // 並び順：さいごの3つは「よみあげ」→「ハッピーバースデー」→「ふみきり」
+  const bd = grid.querySelector('.card[data-id="birthday"]');
+  if(bd) grid.insertBefore(card, bd); else grid.insertBefore(card, grid.querySelector('.card[data-id="fumikiri"]'));
   fillVoiceSelect();
 
   const textIn = card.querySelector('#tts-text'), sel = card.querySelector('#tts-voice'),
