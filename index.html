@@ -387,18 +387,32 @@ function voiceScore(v){
        + (/enhanced|拡張|高品質|neural|natural/i.test(s) ? 3 : 0)
        + (v.localService ? 1 : 0);
 }
+// 日本語の声かどうか（lang が ja_JP のような書き方でも、名前が日本語の声でもひろう）
+function isJa(v){
+  return /^ja([-_]|$)/i.test(v.lang || '') || /kyoko|otoya|o-?ren|hattori/i.test(v.name + ' ' + v.voiceURI);
+}
+function voiceKind(v){
+  const s = v.name + ' ' + v.voiceURI;
+  if(/premium|プレミアム/i.test(s)) return 'プレミアム';
+  if(/enhanced|拡張|高品質/i.test(s)) return '拡張';
+  if(/compact|標準/i.test(s)) return '標準';
+  return '';
+}
 function loadVoice(){
   try {
-    const vs = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang));
-    vs.sort((a, b) => voiceScore(b) - voiceScore(a));
+    const seen = new Set();
+    const vs = speechSynthesis.getVoices().filter(v => isJa(v) && !seen.has(v.voiceURI) && seen.add(v.voiceURI));
+    vs.sort((a, b) => voiceScore(b) - voiceScore(a) || a.name.localeCompare(b.name));
+    // 数が変わったときだけ作りなおす（ひらいている一覧がとじないように）
+    if(vs.length === jaVoices.length && vs.every((v, i) => v.voiceURI === jaVoices[i].voiceURI)) return;
     jaVoices = vs;
     let saved = null; try { saved = localStorage.getItem(VOICE_KEY); } catch(e){}
     jaVoice = vs.find(v => v.voiceURI === saved) || vs[0] || null;
     fillVoiceSelect();
-    // iOSでは声のリストがあとから届くことがあるので、少しのあいだ見なおす
-    if(!vs.length && voiceTries++ < 10) setTimeout(loadVoice, 300);
   } catch(e){}
 }
+// iOSでは声のリストが少しずつ届き、voiceschanged が来ないこともあるので、さいしょの15秒は見なおしつづける
+(function poll(){ if(voiceTries++ < 30){ loadVoice(); setTimeout(poll, 500); } })();
 function fillVoiceSelect(){
   const sel = document.getElementById('tts-voice');
   if(!sel) return;
@@ -410,10 +424,13 @@ function fillVoiceSelect(){
   jaVoices.forEach(v => {
     const o = document.createElement('option');
     o.value = v.voiceURI;
-    o.textContent = (voiceScore(v) >= 3 ? '★ ' : '') + v.name;
+    const kind = voiceKind(v);
+    o.textContent = (voiceScore(v) >= 3 ? '★ ' : '') + v.name + (kind && !v.name.includes(kind) ? `（${kind}）` : '');
     if(jaVoice && v.voiceURI === jaVoice.voiceURI) o.selected = true;
     sel.appendChild(o);
   });
+  const cnt = document.getElementById('tts-count');
+  if(cnt) cnt.innerHTML = R(`この{端|たん}{末|まつ}でつかえる{日|に}{本|ほん}{語|ご}の{声|こえ}：${jaVoices.length}こ`);
 }
 if('speechSynthesis' in window){
   loadVoice();
@@ -599,6 +616,7 @@ MELODIES.forEach(mel => {
     <div class="opt col">
       <label for="tts-voice">{声|こえ}のしゅるい（★はきれいな{声|こえ}）</label>
       <select id="tts-voice"></select>
+      <p class="msg" id="tts-count"></p>
     </div>
     <div class="row">
       <button class="play" type="button" id="play-tts">よみあげる</button>
@@ -612,6 +630,8 @@ MELODIES.forEach(mel => {
   let speaking = false;
   const reset = () => { speaking = false; btn.textContent = 'よみあげる'; card.classList.remove('playing'); };
 
+  // 一覧をひらく前に、あとから届いた声がないか見なおす
+  sel.addEventListener('pointerdown', loadVoice);
   sel.addEventListener('change', () => {
     const v = jaVoices.find(x => x.voiceURI === sel.value);
     if(v){ jaVoice = v; try { localStorage.setItem(VOICE_KEY, v.voiceURI); } catch(e){} }
